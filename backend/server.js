@@ -1,39 +1,63 @@
 const express = require("express");
 const cors = require("cors");
+const dotenv = require("dotenv");
+const OpenAI = require("openai");
+
+dotenv.config();
 
 const app = express();
 const PORT = 3000;
 
-
 app.use(cors());
 app.use(express.json());
 
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 app.get("/", (req, res) => {
   res.send("Backend is running");
 });
 
+app.post("/api/flashcards", async (req, res) => {
+  try {
+    const { notes } = req.body;
 
-app.post("/api/flashcards", (req, res) => {
-  const { notes } = req.body;
+    const prompt = `
+Convert the following notes into flashcards.
 
-  console.log("Received notes:", notes);
+Format:
+Q: question
+A: answer
 
-  
-  const flashcards = [
-    {
-      question: "What is React?",
-      answer: "A JavaScript library for building user interfaces."
-    },
-    {
-      question: "What is Express?",
-      answer: "A backend framework for Node.js."
-    }
-  ];
+Notes:
+${notes}
+`;
 
-  res.json({ flashcards });
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4.1-mini",
+      messages: [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+    });
+
+    const aiResponse = completion.choices[0].message.content;
+
+    res.json({
+      flashcards: aiResponse,
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      error: "Something went wrong",
+    });
+  }
 });
-
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);

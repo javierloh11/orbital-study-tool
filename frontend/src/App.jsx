@@ -2,7 +2,7 @@ import { useState } from "react";
 
 function App() {
   const [notes, setNotes] = useState("");
-  const [flashcards, setFlashcards] = useState([]);
+  const [flashcards, setFlashcards] = useState("");
 
   const generateFlashcards = async () => {
     const response = await fetch("http://localhost:3000/api/flashcards", {
@@ -14,7 +14,6 @@ function App() {
     });
 
     const data = await response.json();
-
     setFlashcards(data.flashcards);
   };
 
@@ -34,13 +33,8 @@ function App() {
         Generate Flashcards
       </button>
 
-      <div>
-        {flashcards.map((card, index) => (
-          <div key={index}>
-            <h3>{card.question}</h3>
-            <p>{card.answer}</p>
-          </div>
-        ))}
+      <div style={{ marginTop: "20px", whiteSpace: "pre-wrap" }}>
+        {flashcards}
       </div>
     </div>
   );
