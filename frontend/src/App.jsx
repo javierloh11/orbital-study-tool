@@ -1,21 +1,37 @@
 import { useState } from "react";
+import * as pdfjsLib from "pdfjs-dist";
+import pdfWorker from "pdfjs-dist/build/pdf.worker.mjs?url";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 function App() {
   const [notes, setNotes] = useState("");
   const [flashcards, setFlashcards] = useState("");
 
-  const handleFileUpload = (event) => {
+  const handleFileUpload = async (event) => {
     const file = event.target.files[0];
-
     if (!file) return;
 
-    const reader = new FileReader();
+    if (file.type === "text/plain") {
+      const text = await file.text();
+      setNotes(text);
+    } else if (file.type === "application/pdf") {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
-    reader.onload = (e) => {
-      setNotes(e.target.result);
-    };
+      let pdfText = "";
 
-    reader.readAsText(file);
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map((item) => item.str).join(" ");
+        pdfText += pageText + "\n\n";
+      }
+
+      setNotes(pdfText);
+    } else {
+      alert("Please upload a .txt or .pdf file only.");
+    }
   };
 
   const generateFlashcards = async () => {
@@ -40,12 +56,14 @@ function App() {
         placeholder="Paste your notes here..."
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
+        rows="10"
+        cols="60"
       />
 
-      <h3>Or Upload a Text File</h3>
+      <h3>Or Upload a File</h3>
       <input
         type="file"
-        accept=".txt"
+        accept=".txt,.pdf"
         onChange={handleFileUpload}
       />
 
