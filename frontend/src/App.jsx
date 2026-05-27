@@ -7,6 +7,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 function App() {
   const [notes, setNotes] = useState("");
   const [flashcards, setFlashcards] = useState("");
+  const [keyPoints, setKeyPoints] = useState("");
 
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
@@ -32,6 +33,19 @@ function App() {
     } else {
       alert("Please upload a .txt or .pdf file only.");
     }
+  };
+
+  const extractKeyPoints = async () => {
+    const response = await fetch("http://localhost:3000/api/process-notes", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ notes }),
+    });
+
+    const data = await response.json();
+    setKeyPoints(data.keyPoints);
   };
 
   const generateFlashcards = async () => {
@@ -61,22 +75,22 @@ function App() {
       />
 
       <h3>Or Upload a File</h3>
-      <input
-        type="file"
-        accept=".txt,.pdf"
-        onChange={handleFileUpload}
-      />
+      <input type="file" accept=".txt,.pdf" onChange={handleFileUpload} />
 
       <br />
       <br />
 
-      <button onClick={generateFlashcards}>
+      <button onClick={extractKeyPoints}>Extract Key Points</button>
+
+      <button onClick={generateFlashcards} style={{ marginLeft: "10px" }}>
         Generate Flashcards
       </button>
 
-      <div style={{ marginTop: "20px", whiteSpace: "pre-wrap" }}>
-        {flashcards}
-      </div>
+      <h3>Key Points</h3>
+      <div style={{ whiteSpace: "pre-wrap" }}>{keyPoints}</div>
+
+      <h3>Flashcards</h3>
+      <div style={{ whiteSpace: "pre-wrap" }}>{flashcards}</div>
     </div>
   );
 }
