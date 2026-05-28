@@ -8,91 +8,307 @@ function App() {
   const [notes, setNotes] = useState("");
   const [flashcards, setFlashcards] = useState("");
   const [keyPoints, setKeyPoints] = useState("");
+  const [loading, setLoading] = useState("");
+  const [error, setError] = useState("");
 
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
+
     if (!file) return;
 
-    if (file.type === "text/plain") {
+    setError("");
+
+    // TXT FILE
+    if (file.name.endsWith(".txt")) {
       const text = await file.text();
       setNotes(text);
-    } else if (file.type === "application/pdf") {
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
-      let pdfText = "";
+    // PDF FILE
+    } else if (file.name.endsWith(".pdf")) {
+      try {
+        const arrayBuffer = await file.arrayBuffer();
 
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items.map((item) => item.str).join(" ");
-        pdfText += pageText + "\n\n";
+        const pdf = await pdfjsLib.getDocument({
+          data: arrayBuffer,
+        }).promise;
+
+        let pdfText = "";
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+
+          const textContent = await page.getTextContent();
+
+          const pageText = textContent.items
+            .map((item) => item.str)
+            .join(" ");
+
+          pdfText += pageText + "\n\n";
+        }
+
+        setNotes(pdfText);
+
+      } catch (err) {
+        console.error(err);
+        setError("Failed to read PDF file.");
       }
 
-      setNotes(pdfText);
     } else {
-      alert("Please upload a .txt or .pdf file only.");
+      setError("Please upload a .txt or .pdf file only.");
     }
   };
 
   const extractKeyPoints = async () => {
-    const response = await fetch("http://localhost:3000/api/process-notes", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ notes }),
-    });
+    try {
+      setLoading("Processing notes...");
+      setError("");
 
-    const data = await response.json();
-    setKeyPoints(data.keyPoints);
+      const response = await fetch(
+        "http://localhost:3000/api/process-notes",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ notes }),
+        }
+      );
+
+      const data = await response.json();
+
+      setKeyPoints(data.keyPoints);
+
+    } catch (err) {
+      console.error(err);
+      setError("Failed to extract key points.");
+
+    } finally {
+      setLoading("");
+    }
   };
 
   const generateFlashcards = async () => {
-    const response = await fetch("http://localhost:3000/api/flashcards", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ notes }),
-    });
+    try {
+      setLoading("Generating flashcards...");
+      setError("");
 
-    const data = await response.json();
-    setFlashcards(data.flashcards);
+      const response = await fetch(
+        "http://localhost:3000/api/flashcards",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ notes }),
+        }
+      );
+
+      const data = await response.json();
+
+      setFlashcards(data.flashcards);
+
+    } catch (err) {
+      console.error(err);
+      setError("Failed to generate flashcards.");
+
+    } finally {
+      setLoading("");
+    }
   };
 
   return (
-    <div>
-      <h1>Orbital Study Tool</h1>
+    <div style={styles.page}>
+      <div style={styles.container}>
 
-      <h3>Paste Notes</h3>
-      <textarea
-        placeholder="Paste your notes here..."
-        value={notes}
-        onChange={(e) => setNotes(e.target.value)}
-        rows="10"
-        cols="60"
-      />
+        <h1 style={styles.title}>
+          Orbital Study Tool
+        </h1>
 
-      <h3>Or Upload a File</h3>
-      <input type="file" accept=".txt,.pdf" onChange={handleFileUpload} />
+        <p style={styles.subtitle}>
+          Upload or paste your study materials to generate key points and flashcards.
+        </p>
 
-      <br />
-      <br />
+        {/* INPUT CARD */}
+        <div style={styles.card}>
+          <h2 style={styles.heading}>Input Notes</h2>
 
-      <button onClick={extractKeyPoints}>Extract Key Points</button>
+          <textarea
+            style={styles.textarea}
+            placeholder="Paste your notes here..."
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+          />
 
-      <button onClick={generateFlashcards} style={{ marginLeft: "10px" }}>
-        Generate Flashcards
-      </button>
+          <div style={styles.uploadBox}>
+            <p style={styles.uploadText}>
+              Or upload a .txt / .pdf file
+            </p>
 
-      <h3>Key Points</h3>
-      <div style={{ whiteSpace: "pre-wrap" }}>{keyPoints}</div>
+            <input
+              type="file"
+              accept=".txt,.pdf"
+              onChange={handleFileUpload}
+            />
+          </div>
 
-      <h3>Flashcards</h3>
-      <div style={{ whiteSpace: "pre-wrap" }}>{flashcards}</div>
+          <div style={styles.buttonRow}>
+            <button
+              style={styles.button}
+              onClick={extractKeyPoints}
+              disabled={loading}
+            >
+              Extract Key Points
+            </button>
+
+            <button
+              style={styles.button}
+              onClick={generateFlashcards}
+              disabled={loading}
+            >
+              Generate Flashcards
+            </button>
+          </div>
+
+          {loading && (
+            <p style={styles.loading}>
+              {loading}
+            </p>
+          )}
+
+          {error && (
+            <p style={styles.error}>
+              {error}
+            </p>
+          )}
+        </div>
+
+        {/* KEY POINTS CARD */}
+        <div style={styles.card}>
+          <h2 style={styles.heading}>Key Points</h2>
+
+          <div style={styles.output}>
+            {keyPoints || "No key points generated yet."}
+          </div>
+        </div>
+
+        {/* FLASHCARDS CARD */}
+        <div style={styles.card}>
+          <h2 style={styles.heading}>Flashcards</h2>
+
+          <div style={styles.output}>
+            {flashcards || "No flashcards generated yet."}
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 }
+
+const styles = {
+  page: {
+    minHeight: "100vh",
+    backgroundColor: "#f3f4f6",
+    padding: "40px",
+    fontFamily: "Arial, sans-serif",
+  },
+
+  container: {
+    maxWidth: "900px",
+    margin: "0 auto",
+  },
+
+  title: {
+    textAlign: "center",
+    fontSize: "48px",
+    marginBottom: "10px",
+    color: "#111827",
+    fontWeight: "bold",
+  },
+
+  subtitle: {
+    textAlign: "center",
+    color: "#4b5563",
+    fontSize: "18px",
+    marginBottom: "30px",
+  },
+
+  card: {
+    backgroundColor: "white",
+    color: "#111827",
+    padding: "28px",
+    borderRadius: "14px",
+    marginBottom: "24px",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+  },
+
+  heading: {
+    marginBottom: "16px",
+    color: "#111827",
+  },
+
+  textarea: {
+    width: "100%",
+    height: "220px",
+    padding: "14px",
+    fontSize: "15px",
+    borderRadius: "8px",
+    border: "1px solid #d1d5db",
+    resize: "vertical",
+    backgroundColor: "white",
+    color: "#111827",
+    boxSizing: "border-box",
+  },
+
+  uploadBox: {
+    marginTop: "20px",
+    padding: "16px",
+    backgroundColor: "#f9fafb",
+    color: "#374151",
+    borderRadius: "8px",
+    border: "1px solid #e5e7eb",
+  },
+
+  uploadText: {
+    marginBottom: "10px",
+    fontWeight: "500",
+  },
+
+  buttonRow: {
+    marginTop: "20px",
+    display: "flex",
+    gap: "12px",
+  },
+
+  button: {
+    padding: "12px 20px",
+    border: "none",
+    borderRadius: "8px",
+    backgroundColor: "#2563eb",
+    color: "white",
+    fontSize: "15px",
+    fontWeight: "600",
+    cursor: "pointer",
+  },
+
+  loading: {
+    marginTop: "18px",
+    color: "#2563eb",
+    fontWeight: "bold",
+  },
+
+  error: {
+    marginTop: "18px",
+    color: "red",
+    fontWeight: "bold",
+  },
+
+  output: {
+    whiteSpace: "pre-wrap",
+    lineHeight: "1.8",
+    color: "#374151",
+    fontSize: "15px",
+  },
+};
 
 export default App;
