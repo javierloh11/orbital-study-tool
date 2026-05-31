@@ -438,3 +438,354 @@ This objective has been successfully achieved through:
 - Functional and responsive user interface
 
 The current implementation demonstrates a working proof of concept and establishes a strong foundation for future development. Planned future enhancements include summary sheet generation, content persistence, and additional study support features.
+
+# 7. Documentation of System
+
+## Overview
+
+The Orbital Study Tool follows a client-server architecture consisting of a React frontend, an Express backend, and the OpenAI API.
+
+The frontend is responsible for user interaction and displaying results, while the backend handles file processing, AI communication, and response generation.
+
+---
+
+## Frontend Components
+
+### App.jsx
+
+The main frontend component is responsible for:
+
+- Accepting user input
+- Handling TXT and PDF uploads
+- Sending requests to the backend
+- Displaying generated key points
+- Displaying generated flashcards
+- Managing loading states and error messages
+
+### User Interface
+
+The user interface consists of:
+
+- Input Notes section
+- File Upload section
+- Extract Key Points button
+- Generate Flashcards button
+- Key Points display area
+- Flashcards display area
+
+The interface is designed to provide a simple workflow from study material submission to revision material generation.
+
+---
+
+## Backend Components
+
+### server.js
+
+The backend is implemented using Node.js and Express.
+
+Responsibilities include:
+
+- Receiving requests from the frontend
+- Processing study materials
+- Communicating with the OpenAI API
+- Returning generated outputs
+- Handling errors and validation
+
+The backend acts as the central controller of the application.
+
+---
+
+## API Endpoints
+
+### POST /api/process-notes
+
+#### Purpose
+
+Processes study materials and extracts key points.
+
+#### Input
+
+```json
+{
+  "notes": "study material content"
+}
+```
+
+#### Output
+
+Generated key points and important concepts extracted from the submitted content.
+
+---
+
+### POST /api/generate-flashcards
+
+#### Purpose
+
+Generates flashcards from submitted study materials.
+
+#### Input
+
+```json
+{
+  "notes": "study material content"
+}
+```
+
+#### Output
+
+Question-and-answer flashcards generated from the provided study material.
+
+---
+
+## File Processing
+
+### TXT File Processing
+
+Workflow:
+
+1. User uploads a TXT file.
+2. The frontend reads the file contents.
+3. Extracted text is placed into the input field.
+4. Content is sent to the backend for AI processing.
+
+---
+
+### PDF File Processing
+
+Workflow:
+
+1. User uploads a PDF file.
+2. The frontend uses pdfjs-dist to extract text.
+3. Extracted content is displayed in the input area.
+4. Content is sent to the backend.
+5. AI-generated outputs are returned to the user.
+
+This allows users to work directly with lecture notes, study guides, and educational materials stored as PDF documents.
+
+---
+
+## External Services
+
+### OpenAI API
+
+The application uses the OpenAI API to generate educational content.
+
+Current use cases include:
+
+- Key point extraction
+- Flashcard generation
+
+The API receives processed study materials and returns structured outputs suitable for revision and learning.
+
+---
+
+## Error Handling
+
+The application includes basic error handling mechanisms:
+
+- Empty input validation
+- API request error handling
+- File upload validation
+- Processing status indicators
+
+These mechanisms help improve reliability and provide feedback to users when issues occur.
+
+---
+
+## Current Limitations
+
+The current version of the system has several limitations:
+
+- Generated content quality depends on the uploaded study material.
+- Very large documents may increase processing time.
+- Generated outputs cannot currently be saved.
+- Summary sheet generation has not yet been implemented.
+
+These limitations will be addressed in future development milestones.
+
+# 8. Installation and Setup
+
+## Prerequisites
+
+Before running the application, ensure that the following software is installed:
+
+- Node.js
+- npm
+- Git
+- Visual Studio Code (recommended)
+
+An OpenAI API key is also required for AI-powered functionality.
+
+---
+
+## Clone Repository
+
+```bash
+git clone https://github.com/javierloh11/orbital-study-tool.git
+cd orbital-study-tool
+```
+
+---
+
+## Install Frontend Dependencies
+
+```bash
+cd frontend
+npm install
+```
+
+---
+
+## Install Backend Dependencies
+
+```bash
+cd ../backend
+npm install
+```
+
+---
+
+## Environment Variables
+
+Create a `.env` file inside the `backend` directory.
+
+Example:
+
+```env
+OPENAI_API_KEY=your_openai_api_key
+```
+
+---
+
+## Running the Backend
+
+Navigate to the backend directory and start the server:
+
+```bash
+cd backend
+node server.js
+```
+
+Expected output:
+
+```text
+Server running on http://localhost:3000
+```
+
+---
+
+## Running the Frontend
+
+Open a second terminal and navigate to the frontend directory:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Expected output:
+
+```text
+Local: http://localhost:5173/
+```
+
+---
+
+## Accessing the Application
+
+Open the following URL in a web browser:
+
+```text
+http://localhost:5173
+```
+
+The application should display the Orbital Study Tool homepage.
+
+---
+
+## Using the Application
+
+### Option 1: Paste Notes
+
+1. Copy study materials.
+2. Paste them into the input area.
+3. Click **Extract Key Points** or **Generate Flashcards**.
+
+### Option 2: Upload Study Materials
+
+1. Click **Choose File**.
+2. Select a TXT or PDF document.
+3. Wait for the text to be extracted.
+4. Click **Extract Key Points** or **Generate Flashcards**.
+
+---
+
+## Supported File Types
+
+Currently supported:
+
+- TXT
+- PDF
+
+Future versions may support additional document formats.
+
+---
+
+## Repository Structure
+
+```text
+orbital-study-tool/
+│
+├── frontend/
+│   ├── src/
+│   ├── public/
+│   └── package.json
+│
+├── backend/
+│   ├── server.js
+│   ├── package.json
+│   └── .env
+│
+├── screenshots/
+│
+└── README.md
+```
+
+# 9. Future Work
+
+The current implementation establishes the foundation of the Orbital Study Tool. Future development will focus on expanding functionality, improving usability, and enhancing the overall learning experience.
+
+## Feature 3: Summary Sheet Generation
+
+A structured summary sheet generation feature will be implemented to provide users with concise revision notes derived from uploaded study materials. This feature will complement flashcard generation by offering an alternative revision format.
+
+---
+
+## Saving Generated Content
+
+Users will be able to save generated flashcards, key points, and summary sheets for future access. This will allow users to build a personal repository of study materials over time.
+
+---
+
+## Editing and Regeneration
+
+Users will be able to edit AI-generated content and regenerate outputs if they are not satisfied with the initial results. This will provide greater flexibility and customisation.
+
+---
+
+## Study Mode
+
+A dedicated study interface will be introduced to allow users to review flashcards directly within the application. Features such as card flipping, progress tracking, and revision sessions may be included.
+
+---
+
+## Export Functionality
+
+Users will be able to export generated study materials into downloadable formats for offline revision and sharing.
+
+---
+
+## Long-Term Vision
+
+The long-term goal of the Orbital Study Tool is to provide students with an integrated AI-assisted revision platform that transforms raw study materials into personalised learning resources. By automating repetitive preparation tasks, the application aims to help students spend more time learning and less time organising study materials.
+
