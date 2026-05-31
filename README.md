@@ -5,6 +5,18 @@
 * Javier
 * Ivan
 
+## Table of Contents
+
+1. [Project Overview](#1-project-overview)
+2. [User Stories](#2-user-stories)
+3. [Features and Design of Application](#3-features-and-design-of-application)
+4. [System Architecture](#4-system-architecture)
+5. [Development Plan](#5-development-plan)
+6. [Current Progress and Technical Proof](#6-current-progress-and-technical-proof)
+7. [Documentation of System](#7-documentation-of-system)
+8. [Installation and Setup](#8-installation-and-setup)
+9. [Future Work](#9-future-work)
+
 # 1. Project Overview
 
 ## Motivation
