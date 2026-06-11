@@ -194,6 +194,14 @@ function App() {
             >
               Generate Flashcards
             </button>
+
+            <button 
+            style={styles.button}
+            onClick={saveNote}
+            disabled={loading}
+            >
+              Save Notes
+            </button>
           </div>
 
           {loading && (
@@ -227,7 +235,34 @@ function App() {
 
       </div>
     </div>
+    
   );
+  async function saveNote() {
+  try {
+    const response = await fetch("http://localhost:3000/save-note", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        title: "Untitled Note",
+        originalText: notes,
+        keyPoints: keyPoints,
+        flashcards: flashcards,
+        sourceType: "text"
+      })
+    });
+
+    const data = await response.json();
+
+    console.log("Saved:", data);
+    alert("Note saved successfully!");
+
+  } catch (error) {
+    console.error("Error saving note:", error);
+    alert("Failed to save note");
+  }
+}
 }
 
 const styles = {
