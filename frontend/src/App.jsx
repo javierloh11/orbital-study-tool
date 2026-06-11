@@ -70,7 +70,7 @@ function App() {
           "eng"
         );
 
-        const extractedText = result.data.text;
+        const extractedText = result.data.text.trim();
 
         setNotes(extractedText);
 
