@@ -1,6 +1,7 @@
 import { useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.mjs?url";
+import Tesseract from "tesseract.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -17,15 +18,16 @@ function App() {
     if (!file) return;
 
     setError("");
+    setLoading("");
 
-    // TXT FILE
     if (file.name.endsWith(".txt")) {
       const text = await file.text();
       setNotes(text);
 
-    // PDF FILE
     } else if (file.name.endsWith(".pdf")) {
       try {
+        setLoading("Extracting text from PDF...");
+
         const arrayBuffer = await file.arrayBuffer();
 
         const pdf = await pdfjsLib.getDocument({
@@ -51,10 +53,36 @@ function App() {
       } catch (err) {
         console.error(err);
         setError("Failed to read PDF file.");
+      } finally {
+        setLoading("");
+      }
+
+    } else if (
+      file.name.endsWith(".png") ||
+      file.name.endsWith(".jpg") ||
+      file.name.endsWith(".jpeg")
+    ) {
+      try {
+        setLoading("Extracting text from image...");
+
+        const result = await Tesseract.recognize(
+          file,
+          "eng"
+        );
+
+        const extractedText = result.data.text;
+
+        setNotes(extractedText);
+
+      } catch (err) {
+        console.error(err);
+        setError("Failed to read image file.");
+      } finally {
+        setLoading("");
       }
 
     } else {
-      setError("Please upload a .txt or .pdf file only.");
+      setError("Please upload a .txt, .pdf, .png, .jpg, or .jpeg file only.");
     }
   };
 
@@ -128,7 +156,6 @@ function App() {
           Upload or paste your study materials to generate key points and flashcards.
         </p>
 
-        {/* INPUT CARD */}
         <div style={styles.card}>
           <h2 style={styles.heading}>Input Notes</h2>
 
@@ -141,12 +168,12 @@ function App() {
 
           <div style={styles.uploadBox}>
             <p style={styles.uploadText}>
-              Or upload a .txt / .pdf file
+              Or upload a .txt / .pdf / .png / .jpg file
             </p>
 
             <input
               type="file"
-              accept=".txt,.pdf"
+              accept=".txt,.pdf,.png,.jpg,.jpeg"
               onChange={handleFileUpload}
             />
           </div>
@@ -182,7 +209,6 @@ function App() {
           )}
         </div>
 
-        {/* KEY POINTS CARD */}
         <div style={styles.card}>
           <h2 style={styles.heading}>Key Points</h2>
 
@@ -191,7 +217,6 @@ function App() {
           </div>
         </div>
 
-        {/* FLASHCARDS CARD */}
         <div style={styles.card}>
           <h2 style={styles.heading}>Flashcards</h2>
 
