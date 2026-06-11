@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const OpenAI = require("openai");
+const db = require("./firebase");
 
 dotenv.config();
 
@@ -93,6 +94,39 @@ ${notes}
 
     res.status(500).json({
       error: "Failed to process notes",
+    });
+  }
+});
+
+app.post("/save-note", async (req, res) => {
+  try {
+    const {
+      title,
+      originalText,
+      keyPoints,
+      flashcards,
+      sourceType
+    } = req.body;
+
+    const docRef = await db.collection("notes").add({
+      title,
+      originalText,
+      keyPoints,
+      flashcards,
+      sourceType,
+      createdAt: new Date()
+    });
+
+    res.json({
+      success: true,
+      id: docRef.id
+    });
+
+  } catch (error) {
+    console.error("Error saving note:", error);
+
+    res.status(500).json({
+      error: "Failed to save note"
     });
   }
 });
