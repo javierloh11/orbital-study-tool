@@ -37,25 +37,15 @@ ${notes}
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
-      messages: [
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
+      messages: [{ role: "user", content: prompt }],
     });
 
-    const aiResponse = completion.choices[0].message.content;
-
     res.json({
-      flashcards: aiResponse,
+      flashcards: completion.choices[0].message.content,
     });
   } catch (error) {
     console.error(error);
-
-    res.status(500).json({
-      error: "Something went wrong",
-    });
+    res.status(500).json({ error: "Failed to generate flashcards" });
   }
 });
 
@@ -78,77 +68,70 @@ ${notes}
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
-      messages: [
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
+      messages: [{ role: "user", content: prompt }],
     });
 
-    const keyPoints = completion.choices[0].message.content;
-
-    res.json({ keyPoints });
+    res.json({
+      keyPoints: completion.choices[0].message.content,
+    });
   } catch (error) {
     console.error(error);
-
-    res.status(500).json({
-      error: "Failed to process notes",
-    });
+    res.status(500).json({ error: "Failed to process notes" });
   }
 });
 
 app.post("/save-note", async (req, res) => {
   try {
+    console.log("SAVE REQUEST RECEIVED");
+    console.log(req.body);
+
     const {
       title,
       originalText,
       keyPoints,
       flashcards,
       summary,
-      sourceType
+      sourceType,
     } = req.body;
 
     const docRef = await db.collection("notes").add({
-      title: title || "Untitled Material",
+      title: title || "Untitled Note",
       originalText: originalText || "",
       keyPoints: keyPoints || "",
-      flashcards: flashcards || [],
+      flashcards: flashcards || "",
       summary: summary || "",
       sourceType: sourceType || "text",
-      createdAt: new Date()
+      createdAt: new Date(),
     });
+
+    console.log("SAVED TO FIRESTORE:", docRef.id);
 
     res.json({
       success: true,
-      id: docRef.id
+      id: docRef.id,
     });
-
   } catch (error) {
     console.error("Error saving note:", error);
-
-    res.status(500).json({
-      error: "Failed to save note"
-    });
+    res.status(500).json({ error: "Failed to save note" });
   }
 });
 
-app.get("/saved note", async (req, res) => {
+app.get("/saved-notes", async (req, res) => {
   try {
     const snapshot = await db
-      .collection("savedMaterials")
+      .collection("notes")
       .orderBy("createdAt", "desc")
       .get();
 
-    const materials = snapshot.docs.map(doc => ({
+    const notes = snapshot.docs.map((doc) => ({
       id: doc.id,
-      ...doc.data()
+      ...doc.data(),
     }));
 
-    res.json(materials);
+    res.json(notes);
   } catch (error) {
-    console.error("Error retrieving note:", error);
-    res.status(500).json({ error: "Failed to retrieve note" });
+    console.error("Error retrieving notes:", error);
+    res.status(500).json({ error: "Failed to retrieve notes" });
   }
 });
 
