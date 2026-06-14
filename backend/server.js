@@ -80,6 +80,42 @@ ${notes}
   }
 });
 
+app.post("/api/summary", async (req, res) => {
+  try {
+    const { notes } = req.body;
+
+    const prompt = `
+Create a structured study summary sheet from the notes below.
+
+Format the answer clearly with these sections:
+
+Title:
+Overview:
+Key Concepts:
+Important Definitions:
+Important Details:
+Examples:
+Exam Tips:
+Quick Revision Checklist:
+
+Notes:
+${notes}
+`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4.1-mini",
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    res.json({
+      summary: completion.choices[0].message.content,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to generate summary" });
+  }
+});
+
 app.post("/save-note", async (req, res) => {
   try {
     console.log("SAVE REQUEST RECEIVED");

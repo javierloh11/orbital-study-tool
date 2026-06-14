@@ -9,6 +9,7 @@ function App() {
   const [notes, setNotes] = useState("");
   const [flashcards, setFlashcards] = useState("");
   const [keyPoints, setKeyPoints] = useState("");
+  const [summary, setSummary] = useState("");
   const [loading, setLoading] = useState("");
   const [error, setError] = useState("");
 
@@ -144,6 +145,63 @@ function App() {
     }
   };
 
+  const generateSummary = async () => {
+    try {
+      setLoading("Generating summary sheet...");
+      setError("");
+
+      const response = await fetch(
+        "http://localhost:3000/api/summary",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ notes }),
+        }
+      );
+
+      const data = await response.json();
+
+      setSummary(data.summary);
+
+    } catch (err) {
+      console.error(err);
+      setError("Failed to generate summary sheet.");
+
+    } finally {
+      setLoading("");
+    }
+  };
+
+  async function saveNote() {
+    try {
+      const response = await fetch("http://localhost:3000/save-note", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          title: "Untitled Note",
+          originalText: notes,
+          keyPoints: keyPoints,
+          flashcards: flashcards,
+          summary: summary,
+          sourceType: "text"
+        })
+      });
+
+      const data = await response.json();
+
+      console.log("Saved:", data);
+      alert("Note saved successfully!");
+
+    } catch (error) {
+      console.error("Error saving note:", error);
+      alert("Failed to save note");
+    }
+  }
+
   return (
     <div style={styles.page}>
       <div style={styles.container}>
@@ -153,7 +211,7 @@ function App() {
         </h1>
 
         <p style={styles.subtitle}>
-          Upload or paste your study materials to generate key points and flashcards.
+          Upload or paste your study materials to generate key points, flashcards, and summary sheets.
         </p>
 
         <div style={styles.card}>
@@ -195,10 +253,18 @@ function App() {
               Generate Flashcards
             </button>
 
-            <button 
-            style={styles.button}
-            onClick={saveNote}
-            disabled={loading}
+            <button
+              style={styles.button}
+              onClick={generateSummary}
+              disabled={loading}
+            >
+              Generate Summary Sheet
+            </button>
+
+            <button
+              style={styles.button}
+              onClick={saveNote}
+              disabled={loading}
             >
               Save Notes
             </button>
@@ -233,36 +299,17 @@ function App() {
           </div>
         </div>
 
+        <div style={styles.card}>
+          <h2 style={styles.heading}>Summary Sheet</h2>
+
+          <div style={styles.output}>
+            {summary || "No summary sheet generated yet."}
+          </div>
+        </div>
+
       </div>
     </div>
-    
   );
-  async function saveNote() {
-  try {
-    const response = await fetch("http://localhost:3000/save-note", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        title: "Untitled Note",
-        originalText: notes,
-        keyPoints: keyPoints,
-        flashcards: flashcards,
-        sourceType: "text"
-      })
-    });
-
-    const data = await response.json();
-
-    console.log("Saved:", data);
-    alert("Note saved successfully!");
-
-  } catch (error) {
-    console.error("Error saving note:", error);
-    alert("Failed to save note");
-  }
-}
 }
 
 const styles = {
@@ -338,6 +385,7 @@ const styles = {
     marginTop: "20px",
     display: "flex",
     gap: "12px",
+    flexWrap: "wrap",
   },
 
   button: {
