@@ -105,15 +105,17 @@ app.post("/save-note", async (req, res) => {
       originalText,
       keyPoints,
       flashcards,
+      summary,
       sourceType
     } = req.body;
 
     const docRef = await db.collection("notes").add({
-      title,
-      originalText,
-      keyPoints,
-      flashcards,
-      sourceType,
+      title: title || "Untitled Material",
+      originalText: originalText || "",
+      keyPoints: keyPoints || "",
+      flashcards: flashcards || [],
+      summary: summary || "",
+      sourceType: sourceType || "text",
       createdAt: new Date()
     });
 
@@ -128,6 +130,25 @@ app.post("/save-note", async (req, res) => {
     res.status(500).json({
       error: "Failed to save note"
     });
+  }
+});
+
+app.get("/saved note", async (req, res) => {
+  try {
+    const snapshot = await db
+      .collection("savedMaterials")
+      .orderBy("createdAt", "desc")
+      .get();
+
+    const materials = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    res.json(materials);
+  } catch (error) {
+    console.error("Error retrieving note:", error);
+    res.status(500).json({ error: "Failed to retrieve note" });
   }
 });
 
