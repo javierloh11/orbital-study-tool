@@ -24,6 +24,10 @@ app.post("/api/flashcards", async (req, res) => {
   try {
     const { notes } = req.body;
 
+    if (!notes || notes.trim().length === 0) {
+      return res.status(400).json({ error: "No notes provided" });
+    }
+
     const prompt = `
 Convert the following notes into flashcards.
 
@@ -52,6 +56,10 @@ ${notes}
 app.post("/api/process-notes", async (req, res) => {
   try {
     const { notes } = req.body;
+
+    if (!notes || notes.trim().length === 0) {
+      return res.status(400).json({ error: "No notes provided" });
+    }
 
     const prompt = `
 Extract the MOST IMPORTANT study points from the notes below.
@@ -84,19 +92,60 @@ app.post("/api/summary", async (req, res) => {
   try {
     const { notes } = req.body;
 
+    if (!notes || notes.trim().length === 0) {
+      return res.status(400).json({ error: "No notes provided" });
+    }
+
     const prompt = `
-Create a structured study summary sheet from the notes below.
+You are an expert university tutor.
 
-Format the answer clearly with these sections:
+Create a HIGH-YIELD EXAM CHEAT SHEET from the notes below.
 
-Title:
-Overview:
-Key Concepts:
-Important Definitions:
-Important Details:
-Examples:
-Exam Tips:
-Quick Revision Checklist:
+Your goal is NOT to summarise everything.
+
+Your goal is to identify the MOST IMPORTANT and MOST TESTABLE concepts.
+
+Rules:
+- Maximum 500 words
+- No code blocks
+- No markdown tables
+- No repeated information
+- No long paragraphs
+- Use concise bullet points
+- Focus on understanding and exam preparation
+- Prioritise concepts likely to appear in quizzes, tests and exams
+
+Output exactly in this format:
+
+# Topic
+
+## 30-Second Summary
+(3 concise sentences maximum)
+
+## Must-Know Concepts
+(5-8 bullets)
+
+## Key Definitions
+(Maximum 5 definitions)
+
+## High-Yield Comparisons
+Format:
+Concept A vs Concept B → key difference
+
+Example:
+Compile-Time Type vs Run-Time Type → compile-time determines accessible methods, run-time determines executed implementation
+
+## Common Exam Traps
+(3-5 bullets)
+
+## Exam Focus
+(What lecturers typically test)
+
+## Quick Self-Test
+(Exactly 5 questions)
+
+## Last-Minute Checklist
+(Exactly 5 checklist items)
 
 Notes:
 ${notes}
