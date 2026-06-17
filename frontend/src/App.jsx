@@ -1,4 +1,5 @@
 import { useState } from "react";
+import "./App.css";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.mjs?url";
 import Tesseract from "tesseract.js";
@@ -7,6 +8,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 function App() {
   const [notes, setNotes] = useState("");
+  const [savedNotes, setSavedNotes] = useState([]);
   const [flashcards, setFlashcards] = useState("");
   const [keyPoints, setKeyPoints] = useState("");
   const [summary, setSummary] = useState("");
@@ -200,7 +202,25 @@ function App() {
       console.error("Error saving note:", error);
       alert("Failed to save note");
     }
-  }
+  };
+
+  async function fetchSavedNote() {
+   try {
+    setLoading("Loading saved notes...");
+    setError("");
+
+    const response = await fetch("http://localhost:3000/saved-notes");
+    const data = await response.json();
+    console.log("Fetched saved notes:", data);
+
+    setSavedNotes(data);
+   } catch (error) {
+    console.error("Error fetching saved notes:", error);
+    setError("Failed to fetch saved notes.");
+   } finally {
+    setLoading("");
+   }
+  };
 
   return (
     <div style={styles.page}>
@@ -268,6 +288,14 @@ function App() {
             >
               Save Notes
             </button>
+
+            <button 
+              onClick={fetchSavedNote}
+              style={styles.button}
+              disabled={loading}
+              >
+              View Saved Notes
+            </button>
           </div>
 
           {loading && (
@@ -305,6 +333,50 @@ function App() {
           <div style={styles.output}>
             {summary || "No summary sheet generated yet."}
           </div>
+
+          <div style={styles.card}>
+            <h2 style={styles.heading}>Saved Notes</h2>
+
+            {savedNotes.length === 0 ? (
+              <div style={styles.output}>No saved notes loaded yet.</div>
+            ) : (
+              savedNotes.map((item) => (
+                <div key={item.id} style={styles.savedNoteCard}>
+                  <h3>{item.title || "Untitled Note"}</h3>
+
+                  <p>
+                    <strong>Original Text:</strong>
+                  </p>
+                  <div style={styles.output}>
+                    {item.originalText || "No original text saved."}
+                    </div>
+
+                    <p>
+                      <strong>Key Points:</strong>
+                    </p>
+                    <div style={styles.output}>
+                      {item.keypoints || "No key points saved."}
+                    </div>
+
+                    <p>
+                      <strong>Flashcards:</strong>
+                    </p>
+                    <div style={styles.output}>
+                      {item.flashcards || "No flashcards saved."}
+                    </div>
+
+                    <p>
+                      <strong>Summary:</strong>
+                    </p>
+                    <div style={styles.output}>
+                      {item.summary || "No summary saved."}
+                    </div>
+                  </div>
+              ))
+            )}
+          </div>
+
+            
         </div>
 
       </div>
@@ -416,6 +488,12 @@ const styles = {
     lineHeight: "1.8",
     color: "#374151",
     fontSize: "15px",
+  },
+
+  savedNoteCard: {
+    borderTop: "1px solid #e5e7eb",
+    paddingTop: "16px",
+    marginTop: "16px",
   },
 };
 

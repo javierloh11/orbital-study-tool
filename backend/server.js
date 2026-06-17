@@ -91,8 +91,9 @@ ${notes}
 app.post("/api/summary", async (req, res) => {
   try {
     const { notes } = req.body;
+    const notesText = typeof notes === "string" ? notes : notes?.originalText || "";
 
-    if (!notes || notes.trim().length === 0) {
+    if (!notesText.trim()) {
       return res.status(400).json({ error: "No notes provided" });
     }
 
@@ -148,7 +149,7 @@ Compile-Time Type vs Run-Time Type → compile-time determines accessible method
 (Exactly 5 checklist items)
 
 Notes:
-${notes}
+${notesText}
 `;
 
     const completion = await openai.chat.completions.create({
@@ -208,12 +209,12 @@ app.get("/saved-notes", async (req, res) => {
       .orderBy("createdAt", "desc")
       .get();
 
-    const notes = snapshot.docs.map((doc) => ({
+    const note = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
 
-    res.json(notes);
+    res.json(note);
   } catch (error) {
     console.error("Error retrieving notes:", error);
     res.status(500).json({ error: "Failed to retrieve notes" });
