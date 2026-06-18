@@ -3,17 +3,29 @@ import "./App.css";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.mjs?url";
 import Tesseract from "tesseract.js";
+import { auth } from "./firebase";
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+} from "firebase/auth";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 function App() {
-  const [notes, setNotes] = useState("");
+  const [user, setUser] = useState(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [savedNotes, setSavedNotes] = useState([]);
+  const [notes, setNotes] = useState("");
   const [flashcards, setFlashcards] = useState("");
   const [keyPoints, setKeyPoints] = useState("");
   const [summary, setSummary] = useState("");
   const [loading, setLoading] = useState("");
   const [error, setError] = useState("");
+  const [subject, setSubject] = useState("");
+  const [subjects, setSubjects] = useState([]);
+  const [newSubject, setNewSubject] = useState("");
 
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
@@ -178,19 +190,24 @@ function App() {
 
   async function saveNote() {
     try {
+      const token = await user.getIdToken();
+      console.log("Subject:", subject)
+      const url = "http://localhost:3000/save-note";
+      console.log("Calling:", url);
       const response = await fetch("http://localhost:3000/save-note", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
+          subject,
           title: "Untitled Note",
           originalText: notes,
-          keyPoints: keyPoints,
-          flashcards: flashcards,
-          summary: summary,
-          sourceType: "text"
-        })
+          keyPoints,
+          flashcards,
+          sourceType: "text",
+        }),
       });
 
       const data = await response.json();
@@ -204,23 +221,136 @@ function App() {
     }
   };
 
-  async function fetchSavedNote() {
-   try {
+async function fetchSavedNote() {
+  try {
+    if (!user) {
+      alert("Please log in first.");
+      return;
+    }
+
+    if (!subject.trim()) {
+      alert("Please enter a subject first.");
+      return;
+    }
+    
     setLoading("Loading saved notes...");
     setError("");
 
-    const response = await fetch("http://localhost:3000/saved-notes");
-    const data = await response.json();
-    console.log("Fetched saved notes:", data);
+    const token = await user.getIdToken();
 
+    const response = await fetch(
+      `http://localhost:3000/saved-notes/${subject}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const data = await response.json();
     setSavedNotes(data);
-   } catch (error) {
+  } catch (error) {
     console.error("Error fetching saved notes:", error);
     setError("Failed to fetch saved notes.");
-   } finally {
+  } finally {
     setLoading("");
-   }
-  };
+  }
+}
+
+  async function registerUser() {
+    try {
+      setError("");
+
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+
+      setUser(userCredential.user);
+    } catch (error) {
+      console.error("REGISTER ERROR:", error.code);
+       if (error.code === "auth/email-already-in-use") {
+        setError("This email is already registered. Please log in instead.");
+       } else if (error.code === "auth/invalid-email") {
+        setError("Please enter a valid email address.");
+       } else if (error.code === "auth/weak-password") {
+        setError("Password should be at least 6 characters.");
+       } else {
+        setError("Failed to register. Please try again.");
+       }
+    }
+  }
+
+  async function loginUser() {
+    try {
+      setError("");
+    
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+    setUser(userCredential.user);
+    } catch (error) {
+      console.error("LOGIN ERROR:", error.code);
+
+      if (
+        error.code === "auth/user-not-found" ||
+        error.code === "auth/invalid-credential"
+      ) {
+        setError("No account found with this email, or the password is incorrect.");
+      } else if (error.code === "auth/invalid-email") {
+        setError("Please enter a valid email address.");
+      } else if (error.code === "auth/wrong-password") {
+        setError("Incorrect password. Please try again.");
+      } else {
+        setError("Failed to log in. Please check your email and password.");
+      }
+    }
+  }
+    
+
+  async function logoutUser() {
+    await signOut(auth);
+    setUser(null);
+  }
+
+  if(!user) {
+    return(
+      <div style={styles.page}>
+        <div style={styles.container}>
+          <div style={styles.card}>
+            <h1>Login to Stitch.io</h1>
+
+            <input
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+
+            <input
+              placeholder="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              />
+
+            
+            <button onClick={loginUser}>Login</button>
+            <button onClick={registerUser}>Register</button>
+
+            {error && (
+              <p style={styles.error}>
+                {error}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={styles.page}>
@@ -235,7 +365,53 @@ function App() {
         </p>
 
         <div style={styles.card}>
+          <h2 style={styles.heading}>Subjects</h2>
+
+          <input
+            style={styles.input}
+            placeholder="Create new subject"
+            value={newSubject}
+            onChange={(e) => setNewSubject(e.target.value)}
+            />
+
+          <button
+            style={styles.button}
+            onClick={() => {
+              if (!newSubject.trim()) return;
+
+              setSubjects([...subjects, newSubject.trim()]);
+              setSubject(newSubject.trim());
+              setNewSubject("");
+            }}
+          >
+            Add Subject
+          </button>
+
+         <select
+            style={styles.input}
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+         >
+          <option value="">Select a subject</option>
+
+          {subjects.map((subj) => (
+            <option key={subj} value={subj}>
+              {subj}
+            </option>
+          ))}
+          </select>
+
+          <p> Current subject: {subject || "None selected"}</p>
+        </div>
+
+        <div style={styles.card}>
           <h2 style={styles.heading}>Input Notes</h2>
+          <input
+          style={styles.input}
+          palceholder="Subject"
+          value={subject}
+          onChange={(e) => setSubject(e.target.value)}
+          />
 
           <textarea
             style={styles.textarea}
@@ -295,6 +471,14 @@ function App() {
               disabled={loading}
               >
               View Saved Notes
+            </button>
+
+            <button
+              style={styles.button}
+              onClick={logoutUser}
+              disabled={loading}
+              >
+              Logout
             </button>
           </div>
 
@@ -494,6 +678,16 @@ const styles = {
     borderTop: "1px solid #e5e7eb",
     paddingTop: "16px",
     marginTop: "16px",
+  },
+
+  input: {
+    width: "100%",
+    padding: "12px",
+    marginBottom: "12px",
+    borderRadius: "8px",
+    border: "1px solid #d1d5db",
+    fontSize: "15px",
+    boxSizing: "border-box",
   },
 };
 

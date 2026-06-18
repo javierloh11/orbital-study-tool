@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const OpenAI = require("openai");
-const db = require("./firebase");
+const { db, auth } = require("./firebase");
 
 dotenv.config();
 
@@ -166,31 +166,35 @@ ${notesText}
   }
 });
 
-app.post("/save-note", async (req, res) => {
+app.post("/save-note", verifyUser, async (req, res) => {
   try {
-    console.log("SAVE REQUEST RECEIVED");
-    console.log(req.body);
+    const uid = req.user.uid;
 
     const {
+      subject,
       title,
       originalText,
       keyPoints,
       flashcards,
-      summary,
       sourceType,
     } = req.body;
 
-    const docRef = await db.collection("notes").add({
+    const subjectName = subject || "General"
+
+    const docRef = await db
+    .collection("users")
+    .doc(uid)
+    .collection("subjects")
+    .doc(subjectName)
+    .collection("notes")
+    .add({
       title: title || "Untitled Note",
       originalText: originalText || "",
       keyPoints: keyPoints || "",
       flashcards: flashcards || "",
-      summary: summary || "",
       sourceType: sourceType || "text",
       createdAt: new Date(),
     });
-
-    console.log("SAVED TO FIRESTORE:", docRef.id);
 
     res.json({
       success: true,
@@ -202,19 +206,67 @@ app.post("/save-note", async (req, res) => {
   }
 });
 
-app.get("/saved-notes", async (req, res) => {
+app.get("/summary/:subject", verifyUser, async (req, res) => {
   try {
+    const uid = req.user.uid;
+    const subject = req.params.subject;
+
     const snapshot = await db
+      .collection("users")
+      .doc(uid)
+      .collection("subjects")
+      .doc(subject)
+      .collection("notes")
+      .get();
+
+    const allKeyPoints = snapshot.docs
+      .map((doc) => doc.data().keyPoints)
+      .join("\n\n");
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4.1-mini",
+      messages: [
+        {
+          role: "user",
+          content: `
+Create a concise study summary sheet using these key points:
+
+${allKeyPoints}
+`,
+        },
+      ],
+    });
+
+    res.json({
+      summary: completion.choices[0].message.content,
+    });
+
+    } catch (error) {
+      console.error("Error generating subject summary:", error);
+      res.status(500).json({ error: "Failed to generate summary" });
+    }
+});
+
+app.get("/saved-notes/:subject", verifyUser, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const subject = req.params.subject;
+
+    const snapshot = await db
+      .collection("users")
+      .doc(uid)
+      .collection("subjects")
+      .doc(subject)
       .collection("notes")
       .orderBy("createdAt", "desc")
       .get();
 
-    const note = snapshot.docs.map((doc) => ({
+    const notes = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
 
-    res.json(note);
+    res.json(notes);
   } catch (error) {
     console.error("Error retrieving notes:", error);
     res.status(500).json({ error: "Failed to retrieve notes" });
@@ -224,3 +276,22 @@ app.get("/saved-notes", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+async function verifyUser(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "No token provided" });
+    }
+
+    const token = authHeader.split("Bearer ")[1];
+    const decodedToken = await auth.verifyIdToken(token);
+
+    req.user = decodedToken;
+    next();
+  } catch (error) {
+    console.error("Auth error:", error);
+    res.status(401).json({ error: "Invalid token" });
+  }
+}
