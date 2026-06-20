@@ -20,23 +20,47 @@ app.get("/", (req, res) => {
   res.send("Backend is running");
 });
 
+function parseFlashcards(aiResponse) {
+  try {
+    return JSON.parse(aiResponse);
+  } catch {
+    const match = aiResponse.match(/\[[\s\S]*\]/);
+    if (!match) {
+      throw new Error("No JSON array found");
+    }
+    return JSON.parse(match[0]);
+  }
+}
+
 app.post("/api/flashcards", async (req, res) => {
   try {
     const { notes } = req.body;
+    const notesText = typeof notes === "string" ? notes : notes?.originalText || "";
 
-    if (!notes || notes.trim().length === 0) {
+    if (!notesText.trim()) {
       return res.status(400).json({ error: "No notes provided" });
     }
 
     const prompt = `
 Convert the following notes into flashcards.
 
-Format:
-Q: question
-A: answer
+Return ONLY valid JSON in this format:
+[
+  {
+    "question": "question here",
+    "answer": "answer here"
+  }
+]
+
+Rules:
+- Make each question clear and useful for studying.
+- Answers should be concise but complete.
+- Do not include markdown.
+- Do not include explanations outside the JSON.
+- Generate 5 to 10 flashcards if possible.
 
 Notes:
-${notes}
+${notesText}
 `;
 
     const completion = await openai.chat.completions.create({
@@ -44,11 +68,12 @@ ${notes}
       messages: [{ role: "user", content: prompt }],
     });
 
-    res.json({
-      flashcards: completion.choices[0].message.content,
-    });
+    const aiResponse = completion.choices[0].message.content;
+    const flashcards = parseFlashcards(aiResponse);
+
+    res.json({ flashcards });
   } catch (error) {
-    console.error(error);
+    console.error("Failed to generate flashcards:", error);
     res.status(500).json({ error: "Failed to generate flashcards" });
   }
 });
@@ -56,8 +81,9 @@ ${notes}
 app.post("/api/process-notes", async (req, res) => {
   try {
     const { notes } = req.body;
+    const notesText = typeof notes === "string" ? notes : notes?.originalText || "";
 
-    if (!notes || notes.trim().length === 0) {
+    if (!notesText.trim()) {
       return res.status(400).json({ error: "No notes provided" });
     }
 
@@ -71,7 +97,7 @@ Return:
 - major ideas only
 
 Notes:
-${notes}
+${notesText}
 `;
 
     const completion = await openai.chat.completions.create({
@@ -98,55 +124,13 @@ app.post("/api/summary", async (req, res) => {
     }
 
     const prompt = `
-You are an expert university tutor.
-
 Create a HIGH-YIELD EXAM CHEAT SHEET from the notes below.
-
-Your goal is NOT to summarise everything.
-
-Your goal is to identify the MOST IMPORTANT and MOST TESTABLE concepts.
 
 Rules:
 - Maximum 500 words
-- No code blocks
-- No markdown tables
-- No repeated information
-- No long paragraphs
 - Use concise bullet points
-- Focus on understanding and exam preparation
-- Prioritise concepts likely to appear in quizzes, tests and exams
-
-Output exactly in this format:
-
-# Topic
-
-## 30-Second Summary
-(3 concise sentences maximum)
-
-## Must-Know Concepts
-(5-8 bullets)
-
-## Key Definitions
-(Maximum 5 definitions)
-
-## High-Yield Comparisons
-Format:
-Concept A vs Concept B → key difference
-
-Example:
-Compile-Time Type vs Run-Time Type → compile-time determines accessible methods, run-time determines executed implementation
-
-## Common Exam Traps
-(3-5 bullets)
-
-## Exam Focus
-(What lecturers typically test)
-
-## Quick Self-Test
-(Exactly 5 questions)
-
-## Last-Minute Checklist
-(Exactly 5 checklist items)
+- Focus on important and testable concepts
+- No markdown tables
 
 Notes:
 ${notesText}
@@ -166,6 +150,56 @@ ${notesText}
   }
 });
 
+app.post("/subjects", verifyUser, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const { subject } = req.body;
+
+    if (!subject || !subject.trim()) {
+      return res.status(400).json({ error: "No subject provided" });
+    }
+
+    const subjectName = subject.trim();
+
+    await db
+      .collection("users")
+      .doc(uid)
+      .collection("subjects")
+      .doc(subjectName)
+      .set({
+        name: subjectName,
+        createdAt: new Date(),
+      });
+
+    res.json({
+      success: true,
+      subject: subjectName,
+    });
+  } catch (error) {
+    console.error("Error creating subject:", error);
+    res.status(500).json({ error: "Failed to create subject" });
+  }
+});
+
+app.get("/subjects", verifyUser, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+
+    const snapshot = await db
+      .collection("users")
+      .doc(uid)
+      .collection("subjects")
+      .get();
+
+    const subjects = snapshot.docs.map((doc) => doc.id);
+
+    res.json(subjects);
+  } catch (error) {
+    console.error("Error retrieving subjects:", error);
+    res.status(500).json({ error: "Failed to retrieve subjects" });
+  }
+});
+
 app.post("/save-note", verifyUser, async (req, res) => {
   try {
     const uid = req.user.uid;
@@ -179,22 +213,35 @@ app.post("/save-note", verifyUser, async (req, res) => {
       sourceType,
     } = req.body;
 
-    const subjectName = subject || "General"
+    const subjectName = subject || "General";
+
+    await db
+      .collection("users")
+      .doc(uid)
+      .collection("subjects")
+      .doc(subjectName)
+      .set(
+        {
+          name: subjectName,
+          updatedAt: new Date(),
+        },
+        { merge: true }
+      );
 
     const docRef = await db
-    .collection("users")
-    .doc(uid)
-    .collection("subjects")
-    .doc(subjectName)
-    .collection("notes")
-    .add({
-      title: title || "Untitled Note",
-      originalText: originalText || "",
-      keyPoints: keyPoints || "",
-      flashcards: flashcards || "",
-      sourceType: sourceType || "text",
-      createdAt: new Date(),
-    });
+      .collection("users")
+      .doc(uid)
+      .collection("subjects")
+      .doc(subjectName)
+      .collection("notes")
+      .add({
+        title: title || "Untitled Note",
+        originalText: originalText || "",
+        keyPoints: keyPoints || "",
+        flashcards: flashcards || [],
+        sourceType: sourceType || "text",
+        createdAt: new Date(),
+      });
 
     res.json({
       success: true,
@@ -204,47 +251,6 @@ app.post("/save-note", verifyUser, async (req, res) => {
     console.error("Error saving note:", error);
     res.status(500).json({ error: "Failed to save note" });
   }
-});
-
-app.get("/summary/:subject", verifyUser, async (req, res) => {
-  try {
-    const uid = req.user.uid;
-    const subject = req.params.subject;
-
-    const snapshot = await db
-      .collection("users")
-      .doc(uid)
-      .collection("subjects")
-      .doc(subject)
-      .collection("notes")
-      .get();
-
-    const allKeyPoints = snapshot.docs
-      .map((doc) => doc.data().keyPoints)
-      .join("\n\n");
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4.1-mini",
-      messages: [
-        {
-          role: "user",
-          content: `
-Create a concise study summary sheet using these key points:
-
-${allKeyPoints}
-`,
-        },
-      ],
-    });
-
-    res.json({
-      summary: completion.choices[0].message.content,
-    });
-
-    } catch (error) {
-      console.error("Error generating subject summary:", error);
-      res.status(500).json({ error: "Failed to generate summary" });
-    }
 });
 
 app.get("/saved-notes/:subject", verifyUser, async (req, res) => {
@@ -273,8 +279,49 @@ app.get("/saved-notes/:subject", verifyUser, async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+app.get("/summary/:subject", verifyUser, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const subject = req.params.subject;
+
+    const snapshot = await db
+      .collection("users")
+      .doc(uid)
+      .collection("subjects")
+      .doc(subject)
+      .collection("notes")
+      .get();
+
+    const allKeyPoints = snapshot.docs
+      .map((doc) => doc.data().keyPoints)
+      .filter(Boolean)
+      .join("\n\n");
+
+    if (!allKeyPoints.trim()) {
+      return res.status(400).json({ error: "No key points found" });
+    }
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4.1-mini",
+      messages: [
+        {
+          role: "user",
+          content: `
+Create a concise study summary sheet using these key points:
+
+${allKeyPoints}
+`,
+        },
+      ],
+    });
+
+    res.json({
+      summary: completion.choices[0].message.content,
+    });
+  } catch (error) {
+    console.error("Error generating subject summary:", error);
+    res.status(500).json({ error: "Failed to generate summary" });
+  }
 });
 
 async function verifyUser(req, res, next) {
@@ -295,3 +342,7 @@ async function verifyUser(req, res, next) {
     res.status(401).json({ error: "Invalid token" });
   }
 }
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
