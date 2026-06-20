@@ -120,6 +120,34 @@ function App() {
     setSavedNotes([]);
   }
 
+  const extractKeyPoints = async (inputNotes = notes) => {
+    try {
+      setLoading("Processing notes...");
+      setError("");
+
+      const response = await fetch("http://localhost:3000/api/process-notes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ notes: inputNotes }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to extract key points");
+      }
+
+      setKeyPoints(data.keyPoints);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to extract key points.");
+    } finally {
+      setLoading("");
+    }
+  };
+
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -128,8 +156,18 @@ function App() {
     setLoading("");
 
     if (file.name.endsWith(".txt")) {
-      const text = await file.text();
-      setNotes(text);
+      try {
+        setLoading("Reading text file...");
+
+        const text = await file.text();
+        setNotes(text);
+        await extractKeyPoints(text);
+      } catch (err) {
+        console.error(err);
+        setError("Failed to read text file.");
+      } finally {
+        setLoading("");
+      }
     } else if (file.name.endsWith(".pdf")) {
       try {
         setLoading("Extracting text from PDF...");
@@ -151,6 +189,7 @@ function App() {
         }
 
         setNotes(pdfText);
+        await extractKeyPoints(pdfText);
       } catch (err) {
         console.error(err);
         setError("Failed to read PDF file.");
@@ -166,7 +205,10 @@ function App() {
         setLoading("Extracting text from image...");
 
         const result = await Tesseract.recognize(file, "eng");
-        setNotes(result.data.text.trim());
+        const imageText = result.data.text.trim();
+
+        setNotes(imageText);
+        await extractKeyPoints(imageText);
       } catch (err) {
         console.error(err);
         setError("Failed to read image file.");
@@ -175,29 +217,6 @@ function App() {
       }
     } else {
       setError("Please upload a .txt, .pdf, .png, .jpg, or .jpeg file only.");
-    }
-  };
-
-  const extractKeyPoints = async () => {
-    try {
-      setLoading("Processing notes...");
-      setError("");
-
-      const response = await fetch("http://localhost:3000/api/process-notes", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ notes }),
-      });
-
-      const data = await response.json();
-      setKeyPoints(data.keyPoints);
-    } catch (err) {
-      console.error(err);
-      setError("Failed to extract key points.");
-    } finally {
-      setLoading("");
     }
   };
 
@@ -466,13 +485,18 @@ function App() {
             />
           </div>
 
+          <p style={styles.helperText}>
+            Uploaded files will automatically generate key points. Use the key
+            points button only for notes typed or pasted manually.
+          </p>
+
           <div style={styles.buttonRow}>
             <button
               style={styles.button}
-              onClick={extractKeyPoints}
+              onClick={() => extractKeyPoints()}
               disabled={loading}
             >
-              Extract Key Points
+              Generate Key Points from Typed Notes
             </button>
 
             <button
@@ -719,6 +743,12 @@ const styles = {
   uploadText: {
     marginBottom: "10px",
     fontWeight: "500",
+  },
+
+  helperText: {
+    marginTop: "16px",
+    color: "#6b7280",
+    fontSize: "14px",
   },
 
   buttonRow: {
