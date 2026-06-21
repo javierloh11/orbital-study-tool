@@ -32,6 +32,7 @@ function App() {
 
   const [loading, setLoading] = useState("");
   const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState("keypoints");
 
   async function fetchSubjects(currentUser = user) {
     try {
@@ -140,6 +141,7 @@ function App() {
       }
 
       setKeyPoints(data.keyPoints);
+      setActiveTab("keypoints");
     } catch (err) {
       console.error(err);
       setError("Failed to extract key points.");
@@ -181,9 +183,7 @@ function App() {
           const page = await pdf.getPage(i);
           const textContent = await page.getTextContent();
 
-          const pageText = textContent.items
-            .map((item) => item.str)
-            .join(" ");
+          const pageText = textContent.items.map((item) => item.str).join(" ");
 
           pdfText += pageText + "\n\n";
         }
@@ -242,6 +242,7 @@ function App() {
       setFlashcards(data.flashcards || []);
       setCurrentCard(0);
       setShowAnswer(false);
+      setActiveTab("flashcards");
     } catch (err) {
       console.error(err);
       setError("Failed to generate flashcards.");
@@ -265,6 +266,7 @@ function App() {
 
       const data = await response.json();
       setSummary(data.summary);
+      setActiveTab("summary");
     } catch (err) {
       console.error(err);
       setError("Failed to generate summary sheet.");
@@ -372,8 +374,10 @@ function App() {
 
       if (Array.isArray(data)) {
         setSavedNotes(data);
+        setActiveTab("saved");
       } else {
         setSavedNotes([]);
+        setActiveTab("saved");
       }
     } catch (error) {
       console.error("Error fetching saved notes:", error);
@@ -386,9 +390,13 @@ function App() {
   if (!user) {
     return (
       <div style={styles.page}>
-        <div style={styles.container}>
-          <div style={styles.card}>
-            <h1>Login to Stitch.io</h1>
+        <div style={styles.loginContainer}>
+          <div style={styles.loginCard}>
+            <h1 style={styles.loginTitle}>Login to Stitch.io</h1>
+
+            <p style={styles.loginSubtitle}>
+              Access your saved notes, flashcards and summaries
+            </p>
 
             <input
               style={styles.input}
@@ -405,15 +413,13 @@ function App() {
               onChange={(e) => setPassword(e.target.value)}
             />
 
-            <div style={styles.buttonRow}>
-              <button style={styles.button} onClick={loginUser}>
-                Login
-              </button>
+            <button style={styles.loginButton} onClick={loginUser}>
+              Login
+            </button>
 
-              <button style={styles.button} onClick={registerUser}>
-                Register
-              </button>
-            </div>
+            <button style={styles.registerButton} onClick={registerUser}>
+              Register
+            </button>
 
             {error && <p style={styles.error}>{error}</p>}
           </div>
@@ -490,46 +496,66 @@ function App() {
             points button only for notes typed or pasted manually.
           </p>
 
-          <div style={styles.buttonRow}>
-            <button
-              style={styles.button}
-              onClick={() => extractKeyPoints()}
-              disabled={loading}
-            >
-              Generate Key Points from Typed Notes
-            </button>
+          <div style={styles.actionSection}>
+            <p style={styles.actionLabel}>Generate</p>
 
-            <button
-              style={styles.button}
-              onClick={generateFlashcards}
-              disabled={loading}
-            >
-              Generate Flashcards
-            </button>
+            <div style={styles.buttonRow}>
+              <button
+                style={styles.button}
+                onClick={() => extractKeyPoints()}
+                disabled={loading}
+              >
+                Key Points
+              </button>
 
-            <button
-              style={styles.button}
-              onClick={generateSummary}
-              disabled={loading}
-            >
-              Generate Summary Sheet
-            </button>
+              <button
+                style={styles.button}
+                onClick={generateFlashcards}
+                disabled={loading}
+              >
+                Flashcards
+              </button>
 
-            <button style={styles.button} onClick={saveNote} disabled={loading}>
-              Save Notes
-            </button>
+              <button
+                style={styles.button}
+                onClick={generateSummary}
+                disabled={loading}
+              >
+                Summary Sheet
+              </button>
+            </div>
 
-            <button
-              style={styles.button}
-              onClick={fetchSavedNote}
-              disabled={loading}
-            >
-              View Saved Notes
-            </button>
+            <p style={styles.actionLabel}>Storage</p>
 
-            <button style={styles.button} onClick={logoutUser} disabled={loading}>
-              Logout
-            </button>
+            <div style={styles.buttonRow}>
+              <button
+                style={styles.secondaryButton}
+                onClick={saveNote}
+                disabled={loading}
+              >
+                Save Notes
+              </button>
+
+              <button
+                style={styles.secondaryButton}
+                onClick={fetchSavedNote}
+                disabled={loading}
+              >
+                View Saved Notes
+              </button>
+            </div>
+
+            <p style={styles.actionLabel}>Account</p>
+
+            <div style={styles.buttonRow}>
+              <button
+                style={styles.logoutButton}
+                onClick={logoutUser}
+                disabled={loading}
+              >
+                Logout
+              </button>
+            </div>
           </div>
 
           {loading && <p style={styles.loading}>{loading}</p>}
@@ -537,128 +563,172 @@ function App() {
         </div>
 
         <div style={styles.card}>
-          <h2 style={styles.heading}>Key Points</h2>
-          <div style={styles.output}>
-            {keyPoints || "No key points generated yet."}
+          <div style={styles.tabRow}>
+            <button
+              style={
+                activeTab === "keypoints" ? styles.activeTab : styles.tabButton
+              }
+              onClick={() => setActiveTab("keypoints")}
+            >
+              Key Points
+            </button>
+
+            <button
+              style={
+                activeTab === "flashcards" ? styles.activeTab : styles.tabButton
+              }
+              onClick={() => setActiveTab("flashcards")}
+            >
+              Flashcards
+            </button>
+
+            <button
+              style={activeTab === "summary" ? styles.activeTab : styles.tabButton}
+              onClick={() => setActiveTab("summary")}
+            >
+              Summary Sheet
+            </button>
+
+            <button
+              style={activeTab === "saved" ? styles.activeTab : styles.tabButton}
+              onClick={() => setActiveTab("saved")}
+            >
+              Saved Notes
+            </button>
           </div>
-        </div>
 
-        <div style={styles.card}>
-          <h2 style={styles.heading}>Flashcards</h2>
-
-          {flashcards.length === 0 ? (
-            <div style={styles.output}>No flashcards generated yet.</div>
-          ) : (
-            <div style={styles.flashcardBox}>
-              <p style={styles.cardCounter}>
-                Card {currentCard + 1} of {flashcards.length}
-              </p>
-
-              <div style={styles.flashcard}>
-                <h3 style={styles.flashcardLabel}>Question</h3>
-
-                <p style={styles.flashcardText}>
-                  {flashcards[currentCard].question}
-                </p>
-
-                {showAnswer && (
-                  <>
-                    <h3 style={styles.flashcardLabel}>Answer</h3>
-
-                    <p style={styles.flashcardAnswer}>
-                      {flashcards[currentCard].answer}
-                    </p>
-                  </>
-                )}
+          {activeTab === "keypoints" && (
+            <>
+              <h2 style={styles.heading}>Key Points</h2>
+              <div style={styles.output}>
+                {keyPoints || "No key points generated yet."}
               </div>
-
-              <div style={styles.buttonRow}>
-                <button
-                  style={styles.button}
-                  onClick={() => setShowAnswer(!showAnswer)}
-                >
-                  {showAnswer ? "Hide Answer" : "Show Answer"}
-                </button>
-
-                <button
-                  style={styles.button}
-                  disabled={currentCard === 0}
-                  onClick={() => {
-                    setCurrentCard((prev) => Math.max(prev - 1, 0));
-                    setShowAnswer(false);
-                  }}
-                >
-                  Previous
-                </button>
-
-                <button
-                  style={styles.button}
-                  disabled={currentCard === flashcards.length - 1}
-                  onClick={() => {
-                    setCurrentCard((prev) =>
-                      Math.min(prev + 1, flashcards.length - 1)
-                    );
-                    setShowAnswer(false);
-                  }}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
+            </>
           )}
-        </div>
 
-        <div style={styles.card}>
-          <h2 style={styles.heading}>Summary Sheet</h2>
-          <div style={styles.output}>
-            {summary || "No summary sheet generated yet."}
-          </div>
-        </div>
+          {activeTab === "flashcards" && (
+            <>
+              <h2 style={styles.heading}>Flashcards</h2>
 
-        <div style={styles.card}>
-          <h2 style={styles.heading}>Saved Notes</h2>
+              {flashcards.length === 0 ? (
+                <div style={styles.output}>No flashcards generated yet.</div>
+              ) : (
+                <div style={styles.flashcardBox}>
+                  <p style={styles.cardCounter}>
+                    Card {currentCard + 1} of {flashcards.length}
+                  </p>
 
-          {savedNotes.length === 0 ? (
-            <div style={styles.output}>No saved notes loaded yet.</div>
-          ) : (
-            savedNotes.map((item) => (
-              <div key={item.id} style={styles.savedNoteCard}>
-                <h3>{item.title || "Untitled Note"}</h3>
+                  <div style={styles.flashcard}>
+                    <h3 style={styles.flashcardLabel}>Question</h3>
 
-                <p>
-                  <strong>Original Text:</strong>
-                </p>
-                <div style={styles.output}>
-                  {item.originalText || "No original text saved."}
+                    <p style={styles.flashcardText}>
+                      {flashcards[currentCard].question}
+                    </p>
+
+                    {showAnswer && (
+                      <>
+                        <h3 style={styles.flashcardLabel}>Answer</h3>
+
+                        <p style={styles.flashcardAnswer}>
+                          {flashcards[currentCard].answer}
+                        </p>
+                      </>
+                    )}
+                  </div>
+
+                  <div style={styles.flashcardControls}>
+                    <button
+                      style={styles.secondaryButton}
+                      disabled={currentCard === 0}
+                      onClick={() => {
+                        setCurrentCard((prev) => Math.max(prev - 1, 0));
+                        setShowAnswer(false);
+                      }}
+                    >
+                      Previous
+                    </button>
+
+                    <button
+                      style={styles.primaryStudyButton}
+                      onClick={() => setShowAnswer(!showAnswer)}
+                    >
+                      {showAnswer ? "Hide Answer" : "Show Answer"}
+                    </button>
+
+                    <button
+                      style={styles.secondaryButton}
+                      disabled={currentCard === flashcards.length - 1}
+                      onClick={() => {
+                        setCurrentCard((prev) =>
+                          Math.min(prev + 1, flashcards.length - 1)
+                        );
+                        setShowAnswer(false);
+                      }}
+                    >
+                      Next
+                    </button>
+                  </div>
                 </div>
+              )}
+            </>
+          )}
 
-                <p>
-                  <strong>Key Points:</strong>
-                </p>
-                <div style={styles.output}>
-                  {item.keyPoints || "No key points saved."}
-                </div>
-
-                <p>
-                  <strong>Flashcards:</strong>
-                </p>
-                <div style={styles.output}>
-                  {Array.isArray(item.flashcards) &&
-                  item.flashcards.length > 0
-                    ? item.flashcards.map((card, index) => (
-                        <div key={index} style={styles.savedFlashcard}>
-                          <p>
-                            <strong>Q:</strong> {card.question}
-                          </p>
-                          <p>
-                            <strong>A:</strong> {card.answer}
-                          </p>
-                        </div>
-                      ))
-                    : "No flashcards saved."}
-                </div>
+          {activeTab === "summary" && (
+            <>
+              <h2 style={styles.heading}>Summary Sheet</h2>
+              <div style={styles.output}>
+                {summary || "No summary sheet generated yet."}
               </div>
-            ))
+            </>
+          )}
+
+          {activeTab === "saved" && (
+            <>
+              <h2 style={styles.heading}>Saved Notes</h2>
+
+              {savedNotes.length === 0 ? (
+                <div style={styles.output}>No saved notes loaded yet.</div>
+              ) : (
+                savedNotes.map((item) => (
+                  <div key={item.id} style={styles.savedNoteCard}>
+                    <h3>{item.title || "Untitled Note"}</h3>
+
+                    <p>
+                      <strong>Original Text:</strong>
+                    </p>
+                    <div style={styles.output}>
+                      {item.originalText || "No original text saved."}
+                    </div>
+
+                    <p>
+                      <strong>Key Points:</strong>
+                    </p>
+                    <div style={styles.output}>
+                      {item.keyPoints || "No key points saved."}
+                    </div>
+
+                    <p>
+                      <strong>Flashcards:</strong>
+                    </p>
+                    <div style={styles.output}>
+                      {Array.isArray(item.flashcards) &&
+                      item.flashcards.length > 0
+                        ? item.flashcards.map((card, index) => (
+                            <div key={index} style={styles.savedFlashcard}>
+                              <p>
+                                <strong>Q:</strong> {card.question}
+                              </p>
+                              <p>
+                                <strong>A:</strong> {card.answer}
+                              </p>
+                            </div>
+                          ))
+                        : "No flashcards saved."}
+                    </div>
+                  </div>
+                ))
+              )}
+            </>
           )}
         </div>
       </div>
@@ -669,14 +739,75 @@ function App() {
 const styles = {
   page: {
     minHeight: "100vh",
-    backgroundColor: "#f3f4f6",
+    background:
+      "linear-gradient(135deg, #eef2ff 0%, #f8fafc 50%, #e0f2fe 100%)",
     padding: "40px",
     fontFamily: "Arial, sans-serif",
+    boxSizing: "border-box",
   },
 
   container: {
     maxWidth: "900px",
     margin: "0 auto",
+  },
+
+  loginContainer: {
+    minHeight: "calc(100vh - 80px)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  loginCard: {
+    width: "100%",
+    maxWidth: "430px",
+    backgroundColor: "white",
+    color: "#111827",
+    padding: "36px",
+    borderRadius: "20px",
+    boxShadow: "0 20px 45px rgba(15, 23, 42, 0.12)",
+    border: "1px solid #e5e7eb",
+  },
+
+  loginTitle: {
+    textAlign: "center",
+    fontSize: "34px",
+    marginBottom: "8px",
+    color: "#111827",
+    fontWeight: "800",
+  },
+
+  loginSubtitle: {
+    textAlign: "center",
+    fontSize: "15px",
+    color: "#6b7280",
+    marginBottom: "28px",
+  },
+
+  loginButton: {
+    width: "100%",
+    padding: "13px 20px",
+    border: "none",
+    borderRadius: "10px",
+    backgroundColor: "#2563eb",
+    color: "white",
+    fontSize: "15px",
+    fontWeight: "700",
+    cursor: "pointer",
+    marginTop: "8px",
+  },
+
+  registerButton: {
+    width: "100%",
+    padding: "13px 20px",
+    border: "1px solid #2563eb",
+    borderRadius: "10px",
+    backgroundColor: "white",
+    color: "#2563eb",
+    fontSize: "15px",
+    fontWeight: "700",
+    cursor: "pointer",
+    marginTop: "12px",
   },
 
   title: {
@@ -706,6 +837,7 @@ const styles = {
   heading: {
     marginBottom: "16px",
     color: "#111827",
+    textAlign: "center",
   },
 
   textarea: {
@@ -729,6 +861,8 @@ const styles = {
     border: "1px solid #d1d5db",
     fontSize: "15px",
     boxSizing: "border-box",
+    backgroundColor: "white",
+    color: "#111827",
   },
 
   uploadBox: {
@@ -738,6 +872,7 @@ const styles = {
     color: "#374151",
     borderRadius: "8px",
     border: "1px solid #e5e7eb",
+    textAlign: "center",
   },
 
   uploadText: {
@@ -749,10 +884,25 @@ const styles = {
     marginTop: "16px",
     color: "#6b7280",
     fontSize: "14px",
+    textAlign: "center",
+  },
+
+  actionSection: {
+    marginTop: "24px",
+  },
+
+  actionLabel: {
+    marginTop: "18px",
+    marginBottom: "8px",
+    color: "#6b7280",
+    fontSize: "14px",
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
   },
 
   buttonRow: {
-    marginTop: "20px",
+    marginTop: "10px",
     display: "flex",
     gap: "12px",
     flexWrap: "wrap",
@@ -769,6 +919,78 @@ const styles = {
     cursor: "pointer",
   },
 
+  secondaryButton: {
+    padding: "12px 20px",
+    border: "1px solid #2563eb",
+    borderRadius: "8px",
+    backgroundColor: "white",
+    color: "#2563eb",
+    fontSize: "15px",
+    fontWeight: "600",
+    cursor: "pointer",
+  },
+
+  logoutButton: {
+    padding: "12px 20px",
+    border: "1px solid #dc2626",
+    borderRadius: "8px",
+    backgroundColor: "white",
+    color: "#dc2626",
+    fontSize: "15px",
+    fontWeight: "600",
+    cursor: "pointer",
+  },
+
+  tabRow: {
+    display: "flex",
+    gap: "10px",
+    marginBottom: "24px",
+    borderBottom: "1px solid #e5e7eb",
+    paddingBottom: "12px",
+    flexWrap: "wrap",
+  },
+
+  tabButton: {
+    padding: "10px 16px",
+    border: "1px solid #d1d5db",
+    borderRadius: "8px",
+    backgroundColor: "white",
+    color: "#374151",
+    fontSize: "14px",
+    fontWeight: "600",
+    cursor: "pointer",
+  },
+
+  activeTab: {
+    padding: "10px 16px",
+    border: "1px solid #2563eb",
+    borderRadius: "8px",
+    backgroundColor: "#2563eb",
+    color: "white",
+    fontSize: "14px",
+    fontWeight: "700",
+    cursor: "pointer",
+  },
+
+  flashcardControls: {
+    marginTop: "22px",
+    display: "flex",
+    justifyContent: "center",
+    gap: "12px",
+    flexWrap: "wrap",
+  },
+
+  primaryStudyButton: {
+    padding: "12px 28px",
+    border: "none",
+    borderRadius: "8px",
+    backgroundColor: "#2563eb",
+    color: "white",
+    fontSize: "15px",
+    fontWeight: "700",
+    cursor: "pointer",
+  },
+
   loading: {
     marginTop: "18px",
     color: "#2563eb",
@@ -777,7 +999,7 @@ const styles = {
 
   error: {
     marginTop: "18px",
-    color: "red",
+    color: "#dc2626",
     fontWeight: "bold",
   },
 
