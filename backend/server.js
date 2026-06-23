@@ -205,13 +205,14 @@ app.post("/save-note", verifyUser, async (req, res) => {
     const uid = req.user.uid;
 
     const {
-      subject,
-      title,
-      originalText,
-      keyPoints,
-      flashcards,
-      sourceType,
-    } = req.body;
+  subject,
+  title,
+  originalText,
+  keyPoints,
+  flashcards,
+  summary,
+  sourceType,
+} = req.body;
 
     const subjectName = subject || "General";
 
@@ -235,13 +236,14 @@ app.post("/save-note", verifyUser, async (req, res) => {
       .doc(subjectName)
       .collection("notes")
       .add({
-        title: title || "Untitled Note",
-        originalText: originalText || "",
-        keyPoints: keyPoints || "",
-        flashcards: flashcards || [],
-        sourceType: sourceType || "text",
-        createdAt: new Date(),
-      });
+  title: title || "Untitled Note",
+  originalText: originalText || "",
+  keyPoints: keyPoints || "",
+  flashcards: flashcards || [],
+  summary: summary || "",
+  sourceType: sourceType || "text",
+  createdAt: new Date(),
+});
 
     res.json({
       success: true,
@@ -276,6 +278,30 @@ app.get("/saved-notes/:subject", verifyUser, async (req, res) => {
   } catch (error) {
     console.error("Error retrieving notes:", error);
     res.status(500).json({ error: "Failed to retrieve notes" });
+  }
+});
+
+app.delete("/saved-notes/:subject/:noteId", verifyUser, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const { subject, noteId } = req.params;
+
+    await db
+      .collection("users")
+      .doc(uid)
+      .collection("subjects")
+      .doc(subject)
+      .collection("notes")
+      .doc(noteId)
+      .delete();
+
+    res.json({
+      success: true,
+      message: "Note deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting note:", error);
+    res.status(500).json({ error: "Failed to delete note" });
   }
 });
 

@@ -20,12 +20,14 @@ function App() {
   const [notes, setNotes] = useState("");
   const [keyPoints, setKeyPoints] = useState("");
   const [summary, setSummary] = useState("");
+  const [noteTitle, setNoteTitle] = useState("");
 
   const [flashcards, setFlashcards] = useState([]);
   const [currentCard, setCurrentCard] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
 
   const [savedNotes, setSavedNotes] = useState([]);
+  const [selectedSavedNote, setSelectedSavedNote] = useState(null);
   const [subject, setSubject] = useState("");
   const [subjects, setSubjects] = useState([]);
   const [newSubject, setNewSubject] = useState("");
@@ -320,10 +322,11 @@ function App() {
         },
         body: JSON.stringify({
           subject,
-          title: "Untitled Note",
+          title: noteTitle.trim() || "Untitled Note",
           originalText: notes,
           keyPoints,
           flashcards,
+          summary,
           sourceType: "text",
         }),
       });
@@ -336,6 +339,7 @@ function App() {
 
       console.log("Saved:", data);
       alert("Note saved successfully!");
+      setNoteTitle("");
       await fetchSubjects(user);
     } catch (error) {
       console.error("Error saving note:", error);
@@ -373,12 +377,20 @@ function App() {
       const data = await response.json();
 
       if (Array.isArray(data)) {
-        setSavedNotes(data);
-        setActiveTab("saved");
-      } else {
-        setSavedNotes([]);
-        setActiveTab("saved");
-      }
+  setSavedNotes(data);
+
+  if (data.length > 0) {
+    setSelectedSavedNote(data[0]);
+  } else {
+    setSelectedSavedNote(null);
+  }
+
+  setActiveTab("saved");
+} else {
+  setSavedNotes([]);
+  setSelectedSavedNote(null);
+  setActiveTab("saved");
+}
     } catch (error) {
       console.error("Error fetching saved notes:", error);
       setError("Failed to fetch saved notes.");
@@ -386,6 +398,37 @@ function App() {
       setLoading("");
     }
   }
+  
+  async function deleteSavedNote(noteId) {
+  try {
+    const token = await user.getIdToken();
+
+    await fetch(
+      `http://localhost:3000/saved-notes/${subject}/${noteId}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const updatedNotes = savedNotes.filter(
+      (note) => note.id !== noteId
+    );
+
+    setSavedNotes(updatedNotes);
+
+    if (updatedNotes.length > 0) {
+      setSelectedSavedNote(updatedNotes[0]);
+    } else {
+      setSelectedSavedNote(null);
+    }
+  } catch (error) {
+    console.error("Error deleting note:", error);
+    alert("Failed to delete note");
+  }
+}
 
   if (!user) {
     return (
@@ -471,6 +514,13 @@ function App() {
 
         <div style={styles.card}>
           <h2 style={styles.heading}>Input Notes</h2>
+
+          <input
+  style={styles.input}
+  placeholder="Enter note title"
+  value={noteTitle}
+  onChange={(e) => setNoteTitle(e.target.value)}
+/>
 
           <textarea
             style={styles.textarea}
@@ -683,53 +733,87 @@ function App() {
           )}
 
           {activeTab === "saved" && (
-            <>
-              <h2 style={styles.heading}>Saved Notes</h2>
+  <>
+    <h2 style={styles.heading}>Saved Notes</h2>
 
-              {savedNotes.length === 0 ? (
-                <div style={styles.output}>No saved notes loaded yet.</div>
-              ) : (
-                savedNotes.map((item) => (
-                  <div key={item.id} style={styles.savedNoteCard}>
-                    <h3>{item.title || "Untitled Note"}</h3>
+    {savedNotes.length === 0 ? (
+      <div style={styles.output}>No saved notes loaded yet.</div>
+    ) : (
+      <>
+        <div style={styles.savedNotesTabs}>
+          {savedNotes.map((note, index) => (
+            <button
+              key={note.id}
+              style={
+                selectedSavedNote?.id === note.id
+                  ? styles.activeNoteTab
+                  : styles.noteTab
+              }
+              onClick={() => setSelectedSavedNote(note)}
+            >
+              {note.title || `Note ${index + 1}`}
+            </button>
+          ))}
+        </div>
 
-                    <p>
-                      <strong>Original Text:</strong>
-                    </p>
-                    <div style={styles.output}>
-                      {item.originalText || "No original text saved."}
+        {selectedSavedNote && (
+          <div style={styles.savedNoteCard}>
+            <div style={styles.savedNoteHeader}>
+              <h3>{selectedSavedNote.title || "Untitled Note"}</h3>
+
+              <button
+                style={styles.deleteButton}
+                onClick={() => deleteSavedNote(selectedSavedNote.id)}
+              >
+                Delete Note
+              </button>
+            </div>
+
+            <p>
+              <strong>Original Text:</strong>
+            </p>
+            <div style={styles.output}>
+              {selectedSavedNote.originalText || "No original text saved."}
+            </div>
+
+            <p>
+              <strong>Key Points:</strong>
+            </p>
+            <div style={styles.output}>
+              {selectedSavedNote.keyPoints || "No key points saved."}
+            </div>
+
+            <p>
+              <strong>Summary:</strong>
+            </p>
+            <div style={styles.output}>
+              {selectedSavedNote.summary || "No summary saved."}
+            </div>
+
+            <p>
+              <strong>Flashcards:</strong>
+            </p>
+            <div style={styles.output}>
+              {Array.isArray(selectedSavedNote.flashcards) &&
+              selectedSavedNote.flashcards.length > 0
+                ? selectedSavedNote.flashcards.map((card, index) => (
+                    <div key={index} style={styles.savedFlashcard}>
+                      <p>
+                        <strong>Q:</strong> {card.question}
+                      </p>
+                      <p>
+                        <strong>A:</strong> {card.answer}
+                      </p>
                     </div>
-
-                    <p>
-                      <strong>Key Points:</strong>
-                    </p>
-                    <div style={styles.output}>
-                      {item.keyPoints || "No key points saved."}
-                    </div>
-
-                    <p>
-                      <strong>Flashcards:</strong>
-                    </p>
-                    <div style={styles.output}>
-                      {Array.isArray(item.flashcards) &&
-                      item.flashcards.length > 0
-                        ? item.flashcards.map((card, index) => (
-                            <div key={index} style={styles.savedFlashcard}>
-                              <p>
-                                <strong>Q:</strong> {card.question}
-                              </p>
-                              <p>
-                                <strong>A:</strong> {card.answer}
-                              </p>
-                            </div>
-                          ))
-                        : "No flashcards saved."}
-                    </div>
-                  </div>
-                ))
-              )}
-            </>
-          )}
+                  ))
+                : "No flashcards saved."}
+            </div>
+          </div>
+        )}
+      </>
+    )}
+  </>
+)}
         </div>
       </div>
     </div>
@@ -1010,6 +1094,51 @@ const styles = {
     fontSize: "15px",
   },
 
+  savedNotesTabs: {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap",
+  marginBottom: "20px",
+},
+
+noteTab: {
+  padding: "10px 16px",
+  border: "1px solid #d1d5db",
+  borderRadius: "8px",
+  backgroundColor: "white",
+  color: "#374151",
+  cursor: "pointer",
+  fontWeight: "600",
+},
+
+activeNoteTab: {
+  padding: "10px 16px",
+  border: "1px solid #2563eb",
+  borderRadius: "8px",
+  backgroundColor: "#2563eb",
+  color: "white",
+  cursor: "pointer",
+  fontWeight: "700",
+},
+
+savedNoteHeader: {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: "20px",
+  gap: "16px",
+},
+
+deleteButton: {
+  padding: "10px 16px",
+  border: "none",
+  borderRadius: "8px",
+  backgroundColor: "#dc2626",
+  color: "white",
+  cursor: "pointer",
+  fontWeight: "600",
+},
+  
   savedNoteCard: {
     borderTop: "1px solid #e5e7eb",
     paddingTop: "16px",
