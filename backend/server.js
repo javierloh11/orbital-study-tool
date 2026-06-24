@@ -116,29 +116,35 @@ ${notesText}
 
 app.post("/api/summary", async (req, res) => {
   try {
-    const { notes } = req.body;
-    const notesText = typeof notes === "string" ? notes : notes?.originalText || "";
+    const { keyPoints } = req.body;
 
-    if (!notesText.trim()) {
-      return res.status(400).json({ error: "No notes provided" });
+    if (!keyPoints || !keyPoints.trim()) {
+      return res.status(400).json({
+        error: "No key points provided",
+      });
     }
 
     const prompt = `
-Create a HIGH-YIELD EXAM CHEAT SHEET from the notes below.
+Create a concise study summary using ONLY the key points below.
 
 Rules:
-- Maximum 500 words
-- Use concise bullet points
-- Focus on important and testable concepts
-- No markdown tables
+- Maximum 250 words
+- Use bullet points
+- Keep explanations concise
+- Focus on understanding and revision
 
-Notes:
-${notesText}
+Key Points:
+${keyPoints}
 `;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
     });
 
     res.json({
@@ -146,7 +152,10 @@ ${notesText}
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Failed to generate summary" });
+
+    res.status(500).json({
+      error: "Failed to generate summary",
+    });
   }
 });
 

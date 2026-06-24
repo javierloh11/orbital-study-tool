@@ -256,6 +256,11 @@ function App() {
   };
 
   const generateSummary = async () => {
+    if (!keyPoints.trim()) {
+       alert("Please generate key points first."); 
+       return; 
+    }
+
     try {
       setLoading("Generating summary sheet...");
       setError("");
@@ -265,7 +270,7 @@ function App() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ notes }),
+        body: JSON.stringify({ keyPoints, }),
       });
 
       const data = await response.json();
