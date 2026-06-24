@@ -36,6 +36,8 @@ function App() {
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("keypoints");
 
+  const [savedNoteTab, setSavedNoteTab] = useState("original");
+
   async function fetchSubjects(currentUser = user) {
     try {
       if (!currentUser) return;
@@ -749,7 +751,10 @@ function App() {
                   ? styles.activeNoteTab
                   : styles.noteTab
               }
-              onClick={() => setSelectedSavedNote(note)}
+              onClick={() => {
+                setSelectedSavedNote(note);
+                setSavedNoteTab("original");
+              }}
             >
               {note.title || `Note ${index + 1}`}
             </button>
@@ -760,7 +765,6 @@ function App() {
           <div style={styles.savedNoteCard}>
             <div style={styles.savedNoteHeader}>
               <h3>{selectedSavedNote.title || "Untitled Note"}</h3>
-
               <button
                 style={styles.deleteButton}
                 onClick={() => deleteSavedNote(selectedSavedNote.id)}
@@ -769,34 +773,59 @@ function App() {
               </button>
             </div>
 
-            <p>
-              <strong>Original Text:</strong>
-            </p>
-            <div style={styles.output}>
-              {selectedSavedNote.originalText || "No original text saved."}
+            <div style={styles.tabRow}>
+              <button
+                style={savedNoteTab === "original" ? styles.activeTab : styles.tabButton}
+                onClick={() => setSavedNoteTab("original")}
+              >
+                Original Text
+              </button>
+
+              <button
+                style={savedNoteTab === "keypoints" ? styles.activeTab : styles.tabButton}
+                onClick={() => setSavedNoteTab("keypoints")}
+              >
+                Key Points
+              </button>
+
+              <button
+                style={savedNoteTab === "flashcards" ? styles.activeTab : styles.tabButton}
+                onClick={() => setSavedNoteTab("flashcards")}
+              >
+                Flashcards
+              </button>
+
+              <button
+                style={savedNoteTab === "summary" ? styles.activeTab : styles.tabButton}
+                onClick={() => setSavedNoteTab("summary")}
+              >
+                Summary
+              </button>
             </div>
 
-            <p>
-              <strong>Key Points:</strong>
-            </p>
-            <div style={styles.output}>
-              {selectedSavedNote.keyPoints || "No key points saved."}
-            </div>
+            {savedNoteTab === "original" && (
+              <div style={styles.output}>
+                {selectedSavedNote.originalText || "No original text saved."}
+              </div>
+            )}
 
-            <p>
-              <strong>Summary:</strong>
-            </p>
-            <div style={styles.output}>
-              {selectedSavedNote.summary || "No summary saved."}
-            </div>
+            {savedNoteTab === "keypoints" && (
+              <div style={styles.output}>
+                {selectedSavedNote.keyPoints || "No key points saved."}
+              </div>
+            )}
 
-            <p>
-              <strong>Flashcards:</strong>
-            </p>
-            <div style={styles.output}>
-              {Array.isArray(selectedSavedNote.flashcards) &&
-              selectedSavedNote.flashcards.length > 0
-                ? selectedSavedNote.flashcards.map((card, index) => (
+            {savedNoteTab === "summary" && (
+              <div style={styles.output}>
+                {selectedSavedNote.summary || "No summary saved."}
+              </div>
+            )}
+
+            {savedNoteTab === "flashcards" && (
+              <div style={styles.output}>
+                {Array.isArray(selectedSavedNote.flashcards) &&
+                selectedSavedNote.flashcards.length > 0
+                  ? selectedSavedNote.flashcards.map((card, index) => (
                     <div key={index} style={styles.savedFlashcard}>
                       <p>
                         <strong>Q:</strong> {card.question}
@@ -808,8 +837,9 @@ function App() {
                   ))
                 : "No flashcards saved."}
             </div>
-          </div>
-        )}
+          )}
+        </div>
+      )}
       </>
     )}
   </>
