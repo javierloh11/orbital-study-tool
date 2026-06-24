@@ -314,7 +314,7 @@ app.delete("/saved-notes/:subject/:noteId", verifyUser, async (req, res) => {
   }
 });
 
-app.get("/summary/:subject", verifyUser, async (req, res) => {
+app.get("/subject-summary/:subject", verifyUser, async (req, res) => {
   try {
     const uid = req.user.uid;
     const subject = req.params.subject;

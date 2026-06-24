@@ -20,6 +20,7 @@ function App() {
   const [notes, setNotes] = useState("");
   const [keyPoints, setKeyPoints] = useState("");
   const [summary, setSummary] = useState("");
+  const [subjectSummary, setSubjectSummary] = useState("");
   const [noteTitle, setNoteTitle] = useState("");
 
   const [flashcards, setFlashcards] = useState([]);
@@ -406,6 +407,34 @@ function App() {
     }
   }
   
+  async function generateSubjectSummary() {
+    try {
+      if (!subject) {
+        alert("Please select a subject.");
+        return;
+      }
+
+      const token = await user.getIdToken();
+
+      const response = await fetch(
+        `http://localhost:3000/subject-summary/${subject}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      setSubjectSummary(data.summary);
+    } catch (error) {
+      console.error(error);
+      alert("Failed to generate subject summary.");
+    }
+  }
+
+
   async function deleteSavedNote(noteId) {
   try {
     const token = await user.getIdToken();
@@ -765,6 +794,25 @@ function App() {
             </button>
           ))}
         </div>
+
+        <div style={{ marginBottom: "20px" }}>
+          <button
+            style={styles.button}
+            onClick={generateSubjectSummary}
+          >
+            Generate Subject Summary Sheet
+          </button>
+        </div>
+
+        {subjectSummary && (
+          <div style={styles.savedNoteCard}>
+            <h3>{subject} Cheat Sheet</h3>
+
+            <div style={styles.output}>
+              {subjectSummary}
+            </div>
+          </div>
+        )}
 
         {selectedSavedNote && (
           <div style={styles.savedNoteCard}>
