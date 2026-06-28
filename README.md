@@ -1,11 +1,15 @@
-# Orbital Study Tool
+# Stitch.io
 
-## Team Members
+**Orbital 2026 – Vostok Tier**
 
-* Javier
-* Ivan
+**Team Members**
 
-## Table of Contents
+- Javier Loh
+- Ivan Tan
+
+---
+
+# Table of Contents
 
 1. [Project Overview](#1-project-overview)
 2. [User Stories](#2-user-stories)
@@ -17,616 +21,882 @@
 8. [Installation and Setup](#8-installation-and-setup)
 9. [Future Work](#9-future-work)
 
+---
+
 # 1. Project Overview
 
 ## Motivation
 
-Students often have large amounts of study material, such as lecture notes, tutorial worksheets, and revision documents. However, these materials are often lengthy, unstructured, or stored in different formats, making revision difficult and time-consuming.
+Students today are exposed to an overwhelming amount of study material throughout a semester. Lecture slides, tutorial worksheets, textbook excerpts, handwritten notes, and revision documents often accumulate across multiple modules and are stored in different formats. While these resources contain valuable information, they are rarely organised in a way that facilitates efficient revision.
 
-Although study aids such as flashcards and summary sheets can significantly improve revision efficiency, many students do not create them because the process is repetitive and requires additional effort on top of studying.
+Many students spend a significant amount of time manually rewriting notes, creating flashcards, and summarising lecture content before they can begin studying effectively. Although these study techniques are widely recognised for improving retention and promoting active recall, preparing these materials is often repetitive and time-consuming. Consequently, students may either postpone creating revision resources or choose to study directly from lengthy notes, reducing the effectiveness of their revision.
 
-Our project is motivated by this problem. We aim to build a system that transforms existing study materials into organised and reusable revision resources, allowing students to spend less time preparing notes and more time learning and revising.
+With recent advances in large language models, it is now possible to automate much of this preparation process. By intelligently extracting important concepts and generating structured study materials, AI can significantly reduce the amount of manual work required while allowing students to focus on understanding concepts instead of organising information.
+
+This project was motivated by the desire to bridge the gap between raw study materials and effective revision resources through an intuitive and accessible web application.
 
 ## Aim
 
-The aim of this project is to develop a web application that allows users to upload or paste study materials and automatically generate structured revision content.
+The aim of Stitch.io is to develop an AI-powered web application that assists students in transforming their study materials into structured revision resources.
 
-The system currently focuses on two primary outputs:
+Rather than replacing traditional studying, Stitch.io serves as a productivity tool that accelerates the preparation stage of revision. Users may upload study materials in multiple formats, after which the system automatically extracts important concepts and generates educational resources that support different learning styles.
 
-* Key point summaries
-* Flashcards for self-testing
+The application currently supports:
 
-By automating the conversion of raw study materials into revision resources, we hope to create a practical and easy-to-use tool that supports more effective learning.
+- Automatic extraction of key concepts
+- AI-generated flashcards
+- Individual note summaries
+- Subject-wide summary sheets
+- Persistent cloud storage of generated materials
+- Organisation of notes by subject
+- Secure user authentication
+
+By combining these features into a single workflow, Stitch.io provides students with a centralised platform for creating, organising, and revisiting personalised study resources.
+
+## Objectives
+
+The primary objectives of the project are:
+
+- Reduce the time required to prepare revision materials.
+- Support multiple study material formats, including text, PDF documents and images.
+- Automatically identify and extract important concepts from uploaded notes.
+- Generate high-quality flashcards that encourage active recall.
+- Produce concise summaries for efficient revision.
+- Allow users to organise study materials under different academic subjects.
+- Store generated content securely for future study sessions.
+- Provide a simple, intuitive, and accessible user experience.
+
+## Why "Stitch.io"?
+
+The name **Stitch.io** reflects the core philosophy of our application.
+
+Students often have notes scattered across different files, formats, and subjects. Stitch.io "stitches" these fragmented resources together by processing, organising, and transforming them into cohesive revision materials. Instead of viewing uploaded documents as isolated files, the application connects them into a growing knowledge base that users can continually build upon throughout the semester.
+
+This concept is particularly evident through the Subject Summary Sheet feature, where multiple individual notes are combined into a single comprehensive revision sheet.
+
+---
 
 # 2. User Stories
 
-The application is designed to support students throughout the revision process by transforming raw study materials into structured revision resources. The following user stories capture the primary use cases that guided the development of the system.
+The application is designed around the workflow of university students preparing for quizzes, assignments, and examinations. The following user stories guided the design and implementation of the system.
 
 ### User Story 1
 
-As a student who wants to revise more efficiently, I want to upload my notes so that I can turn them into more useful study materials.
+**As a student preparing for an examination, I want to upload my study materials so that I can quickly transform them into useful revision resources.**
+
+Students should be able to submit notes through multiple input methods without manually retyping their content.
 
 ### User Story 2
 
-As a student who wants to test my understanding, I want the system to generate flashcards from my notes so that I can revise through active recall.
+**As a student studying different modules, I want to organise my notes under different subjects so that my study materials remain structured and easy to retrieve.**
+
+Users should be able to manage multiple modules independently without mixing their revision materials.
 
 ### User Story 3
 
-As a student who is preparing for examinations, I want a concise summary of my notes so that I can quickly review the key concepts and information.
+**As a student who values efficiency, I want the system to automatically identify the important concepts from my notes so that I do not have to manually search for key information.**
+
+The application should perform key point extraction immediately after processing uploaded content.
 
 ### User Story 4
 
-As a user who has different studying preferences, I want to edit generated study materials so that they better suit my learning needs.
+**As a student using active recall, I want AI-generated flashcards so that I can test my understanding more effectively.**
+
+The generated flashcards should present concise question-and-answer pairs suitable for revision.
 
 ### User Story 5
 
-As a user who wants to continue revising later, I want to save generated materials so that I can access them again in future study sessions.
+**As a student revising before examinations, I want concise summaries of my notes so that I can quickly review important concepts without rereading lengthy documents.**
+
+The application should generate readable summaries that retain essential information while removing unnecessary detail.
+
+### User Story 6
+
+**As a student studying an entire module, I want to generate a summary sheet from all my saved notes within a selected subject so that I can revise the entire module using a single consolidated cheat sheet.**
+
+Rather than summarising individual documents, the application should combine multiple notes into one comprehensive revision resource.
+
+### User Story 7
+
+**As a returning user, I want my generated study materials to be saved securely so that I can continue studying across multiple sessions without regenerating my notes.**
+
+Persistent storage allows users to gradually build a personal library of revision materials.
+
+### User Story 8
+
+**As a user, I want my study materials to remain private so that only I can access my saved notes.**
+
+Authentication ensures each user's data remains isolated and secure.
+
+### User Story 9
+
+**As a student with different learning preferences, I want to regenerate study materials whenever necessary so that I can obtain outputs that better match my preferred style of learning.**
+
+The system should support flexibility instead of restricting users to a single AI-generated response.
+
+---
 
 # 3. Features and Design of Application
 
-The Orbital Study Tool is designed to transform raw study materials into structured revision resources. The application follows a workflow where users submit study materials, the system processes the content, and AI-generated outputs are returned to the user.
+Stitch.io follows an end-to-end workflow that transforms raw study materials into organised revision resources. The application integrates document processing, OCR, AI-powered content generation, cloud storage, and user authentication into a single seamless experience.
 
-## System Workflow
+The workflow is designed to minimise manual effort while allowing students to generate personalised study materials within a few clicks.
 
-1. User pastes notes or uploads study materials.
-2. The frontend sends the content to the backend.
-3. The backend extracts and processes the text.
-4. Important information is extracted from the content.
-5. The processed content is sent to the OpenAI API.
-6. Generated outputs are returned to the frontend.
-7. Users can utilise the generated revision materials for studying.
+## Overall Workflow
 
+1. User logs into Stitch.io.
+2. User selects or creates a subject.
+3. User uploads a PDF, image, or pastes text manually.
+4. The frontend extracts text where necessary.
+5. The backend processes the uploaded content.
+6. Important concepts are automatically extracted.
+7. Users may generate:
+   - Flashcards
+   - Individual summaries
+8. Generated content is saved to Firebase Firestore.
+9. Users can retrieve previous notes at any time.
+10. Users may generate a Subject Summary Sheet using all saved notes within a selected subject.
 ---
 
-## Feature 1: Study Material Submission and Processing
+## Feature 7: Subject Summary Sheet
 
 ### Description
 
-Users can either paste notes directly into the application or upload study materials in supported formats. The system processes the submitted content and extracts important information for further use.
+One of Stitch.io's unique features is the ability to generate a comprehensive summary sheet from all saved notes belonging to a selected subject.
 
-Currently supported formats include:
+Instead of summarising a single uploaded document, the application retrieves every saved note under the chosen subject and consolidates them into a single structured revision sheet. This enables students to revise an entire module using one concise document.
 
-* Plain text input
-* TXT files
-* PDF files
+---
 
 ### Input
 
-Users provide study materials through:
+- All saved notes under a selected subject
 
-* Text input box
-* File upload interface
+---
 
 ### Processing
 
-The system extracts text from the submitted materials.
+The backend retrieves all relevant notes from Firebase Firestore before combining their extracted key points.
 
-For TXT files, the text is read directly from the uploaded file.
+The combined content is then sent to the OpenAI API, where the information is reorganised into a concise, well-structured subject summary.
 
-For PDF files, the system uses PDF text extraction to retrieve the content before processing.
-
-The extracted text is then analysed to identify important concepts and information that may be useful for revision.
+---
 
 ### Output
 
 The system generates:
 
-* Extracted key points
-* Important concepts and information
-* Processed content for downstream features such as flashcard generation
+- Comprehensive subject cheat sheet
+- Module-wide revision summary
+- Consolidated high-yield examination notes
 
-This allows users to quickly understand the main ideas within their study materials without manually reviewing large amounts of content.
+This feature allows students to progressively build their own revision resources throughout the semester instead of relying on a single uploaded document.
 
 ---
 
-## Feature 2: Flashcard Generation
+## Feature 8: Saving Generated Notes
 
 ### Description
 
-This feature automatically converts study materials into flashcards for active recall practice.
+Users may save generated study materials for future use.
 
-Instead of manually creating question-and-answer pairs, users can generate flashcards directly from their uploaded notes and study materials.
+Each saved note stores both the original uploaded content and the AI-generated outputs, allowing users to revisit previous study sessions without regenerating their materials.
+
+---
 
 ### Input
 
-* Processed study materials from Feature 1
+Generated revision materials including:
+
+- Original notes
+- Extracted key points
+- Flashcards
+- Individual summary
+- Subject information
+
+---
 
 ### Processing
 
-The backend sends the processed content to the OpenAI API with instructions to generate educational flashcards.
+The backend verifies the user's authentication token before storing the note inside Firebase Firestore.
 
-The generated flashcards are formatted into question-and-answer pairs before being returned to the frontend.
+Each saved note is associated with:
+
+- User ID
+- Subject
+- Note title
+- Original content
+- Generated outputs
+- Timestamp
+
+---
 
 ### Output
 
-The system generates:
+Users are able to:
 
-* Question-and-answer flashcards
-* Revision-friendly study materials
-* Active recall learning resources
-
-These flashcards allow users to test their understanding of concepts covered in their study materials and support more effective revision.
+- Retrieve previous notes
+- Continue studying across multiple sessions
+- Build a growing library of revision materials
 
 ---
 
-## Feature 3: Summary Sheet Generation (Planned)
+## Feature 9: Study Mode
 
 ### Description
 
-This feature will generate structured summary sheets from uploaded study materials.
+Generated flashcards may be reviewed directly within Stitch.io through a dedicated study interface.
 
-The objective is to provide users with concise revision resources that highlight the most important concepts from longer notes and documents.
-
-### Planned Input
-
-* Processed study materials from Feature 1
-
-### Planned Processing
-
-The backend will analyse the uploaded content and identify important concepts, definitions, and explanations.
-
-The system will then organise the information into a structured summary format suitable for revision.
-
-### Planned Output
-
-The system will generate:
-
-* Concise revision sheets
-* Structured topic summaries
-* Quick-reference study materials
-
-This feature will complement flashcard generation by providing an alternative revision format for users.
+Instead of simply displaying flashcards as text, Study Mode presents them one at a time, encouraging students to actively recall answers before revealing the solution.
 
 ---
 
-## Future Extensions
+### Input
 
-The following features were proposed but have not yet been implemented:
+Previously generated flashcards.
 
-### Saving Generated Content
+---
 
-Users will be able to save generated flashcards and summaries for future access.
+### Processing
 
-### Editing and Regeneration
+The frontend organises flashcards into an interactive study session while allowing users to navigate through the generated cards.
 
-Users will be able to edit generated content or request regenerated outputs if they are not satisfied with the initial results.
+---
 
-### Study Mode
+### Output
 
-A dedicated study interface will allow users to review flashcards directly within the application.
+The application provides:
 
-### Export Functionality
+- Interactive flashcard review
+- Active recall practice
+- More engaging revision experience
 
-Users will be able to export generated study materials into downloadable formats for offline revision.
+---
+
+## Feature 10: Editing and Regeneration
+
+### Description
+
+AI-generated outputs may not always perfectly match a user's preferred learning style.
+
+Stitch.io therefore allows users to regenerate flashcards and summaries whenever necessary, producing alternative outputs while retaining the original uploaded notes.
+
+Future versions may also support manual editing before saving.
+
+---
+
+### Input
+
+Previously generated AI outputs.
+
+---
+
+### Processing
+
+The backend resubmits the processed notes to the OpenAI API using the appropriate prompt.
+
+---
+
+### Output
+
+- Regenerated flashcards
+- Regenerated summaries
+- Improved flexibility for different learning preferences
+
+---
+
+## Overall Application Workflow
+
+The complete workflow of Stitch.io is illustrated below.
+
+```text
+                        User
+                          │
+                          ▼
+                Login / Authentication
+                          │
+                          ▼
+             Create or Select Subject
+                          │
+                          ▼
+      Upload Study Materials / Paste Text
+                          │
+      ┌───────────────────┼────────────────────┐
+      ▼                   ▼                    ▼
+ Manual Text         PDF Processing        OCR Processing
+                        │                    │
+                        └──────────┬─────────┘
+                                   ▼
+                          Extracted Text
+                                   │
+                                   ▼
+                       Automatic Key Point Extraction
+                                   │
+               ┌───────────────────┼─────────────────────┐
+               ▼                   ▼                     ▼
+        Flashcards         Individual Summary      Save Notes
+               │                   │                     │
+               └───────────────────┴──────────────┐
+                                                  ▼
+                                      Firebase Firestore
+                                                  │
+                                ┌─────────────────┴────────────────┐
+                                ▼                                  ▼
+                       Retrieve Saved Notes          Subject Summary Sheet
+                                │                                  │
+                                └──────────────────┬───────────────┘
+                                                   ▼
+                                              Study Mode
+```
+
+---
 
 # 4. System Architecture
 
-The Orbital Study Tool follows a client-server architecture consisting of a React frontend, an Express backend, and external AI services.
+Stitch.io follows a modern client-server architecture consisting of a React frontend, an Express backend, Firebase services, and the OpenAI API.
+
+Each component performs a specialised role within the application while communicating through RESTful APIs.
+
+---
 
 ## High-Level Architecture
 
 ```text
-User
-  ↓
-React Frontend
-  ↓
-Express Backend
-  ↓
-OpenAI API
-  ↓
-Generated Results
-  ↓
-Frontend Display
+                           User
+                             │
+                             ▼
+                    React Frontend (Vite)
+                             │
+                      REST API Requests
+                             │
+                             ▼
+                    Express Backend (Node.js)
+                ┌────────────┼────────────┐
+                ▼            ▼            ▼
+          OpenAI API   Firebase Auth  Firestore
+                │            │            │
+                └────────────┼────────────┘
+                             ▼
+                   AI Generated Outputs
+                             │
+                             ▼
+                      React Frontend
+                             │
+                             ▼
+                           User
 ```
 
-### Frontend
+---
 
-The frontend is developed using React and Vite.
+## Frontend
+
+The frontend is developed using **React** and **Vite**.
 
 Its responsibilities include:
 
-* Accepting user input
-* Handling file uploads
-* Displaying generated outputs
-* Managing user interactions
+- User authentication
+- Subject management
+- Accepting manual note input
+- Uploading PDF documents
+- Uploading images
+- Performing PDF extraction
+- Performing OCR processing
+- Displaying generated outputs
+- Retrieving saved notes
+- Generating subject summary sheets
+- Providing Study Mode
 
-Users interact with the system through a web-based interface where they can paste notes, upload files, and view generated revision materials.
+The frontend is designed to provide a clean and intuitive user interface while handling client-side processing before communicating with the backend.
 
 ---
 
-### Backend
+## Backend
 
-The backend is implemented using Node.js and Express.
+The backend is implemented using **Node.js** and **Express.js**.
 
 Its responsibilities include:
 
-* Receiving requests from the frontend
-* Processing uploaded content
-* Communicating with the OpenAI API
-* Returning generated outputs to the frontend
-
-The backend acts as the intermediary between the user interface and the AI processing services.
-
----
-
-### OpenAI Integration
-
-The application uses the OpenAI API to generate educational content from uploaded study materials.
-
-The API is currently used for:
-
-* Key point extraction
-* Flashcard generation
-
-The backend constructs prompts and sends the processed study material to the API before returning generated outputs to the frontend.
-
----
-
-### File Processing Pipeline
-
-TXT files:
-
-1. User uploads TXT file.
-2. Frontend reads file contents.
-3. Extracted text is sent to the backend.
-
-PDF files:
-
-1. User uploads PDF file.
-2. The frontend uses pdfjs-dist to extract text.
-3. Extracted text is sent to the backend.
-4. The backend processes the content before AI generation.
-
----
-
-### Data Flow
-
-The overall data flow within the application is as follows:
-
-1. User submits study materials.
-2. Frontend extracts text from uploaded files.
-3. Backend receives the processed content.
-4. OpenAI API generates educational outputs.
-5. Generated outputs are returned to the frontend.
-6. Users review the generated study materials.
-
-# 5. Development Plan
-
-The project follows an incremental development approach. We first focused on building a working end-to-end system before progressively improving functionality and usability.
-
-## Milestone 1 – Technical Proof of Concept
-
-### Objectives
-
-* Set up the frontend and backend architecture.
-* Establish communication between frontend and backend.
-* Implement study material submission and processing.
-* Implement flashcard generation.
-* Build a complete workflow from user input to generated output.
-
-### Planned Deliverables
-
-* Basic frontend-backend integration
-* Feature 1 implemented at a basic level
-* Feature 2 implemented at a basic level
-
-### Current Status
-
-Completed:
-
-* React frontend setup
-* Express backend setup
-* Frontend-backend integration
-* OpenAI API integration
-* TXT file upload support
-* PDF file upload support
-* Key point extraction
-* Flashcard generation
-* Improved user interface
-* Loading indicators and error handling
-
-Milestone 1 objectives have been successfully achieved.
-
----
-
-## Milestone 2 – Prototype
-
-### Planned Objectives
-
-* Implement summary sheet generation.
-* Improve output quality and formatting.
-* Add database integration for saving generated content.
-* Improve user experience and interface design.
-
-### Planned Deliverables
-
-* Feature 1 completed
-* Feature 2 improved
-* Feature 3 implemented
-* Feature 4 implemented
-
----
-
-## Milestone 3 – Extended System
-
-### Planned Objectives
-
-* Implement editing and regeneration functionality.
-* Add study mode for reviewing flashcards.
-* Support exporting generated content.
-* Improve overall usability and integration.
-
-### Planned Deliverables
-
-* Feature 5 implemented
-* Feature 6 implemented
-* Feature 7 implemented
-* Fully integrated study tool with both core and extension features
-
-# 6. Current Progress and Technical Proof
-
-## Current Implementation Status
-
-The current system successfully supports the core workflow from study material submission to AI-generated revision materials.
-
-The following functionalities have been implemented:
-
-### Study Material Submission and Processing
-- Manual note input
-- TXT file upload
-- PDF file upload
-- Text extraction from uploaded files
-- Key point extraction
-
-### Flashcard Generation
-- AI-powered flashcard generation
-- Question-and-answer output generation
-- Integration with uploaded study materials
-
-### User Interface Improvements
-- Card-based interface design
-- Loading indicators during AI processing
-- Error handling for failed requests
-- Improved readability and organisation of outputs
-
----
-
-## Technical Proof
-
-The screenshots below demonstrate the successful implementation of the core Milestone 1 features.
-
-### Screenshot 1: Main Application Interface
-
-![Homepage](screenshots/homepage.png)
-
-**Description:**
-
-The main application interface allows users to paste notes directly into the system or upload study materials in TXT and PDF formats. Users can then choose to extract key points or generate flashcards from the submitted content.
-
----
-
-### Screenshot 2: Study Material Upload
-
-![Study Material Upload](screenshots/upload.png)
-
-**Description:**
-
-The application successfully extracts text from uploaded PDF documents and populates the input area with the processed content. This demonstrates the file upload and text extraction workflow.
-
----
-
-### Screenshot 3: Key Point Extraction
-
-![Key Point Extraction](screenshots/keypoints.png)
-
-**Description:**
-
-The system processes uploaded study materials and extracts important concepts and information to create concise revision notes. This feature helps users quickly identify the most relevant content from lengthy study materials.
-
----
-
-### Screenshot 4: Flashcard Generation
-
-![Flashcard Generation](screenshots/flashcards.png)
-
-**Description:**
-
-The application uses the OpenAI API to generate question-and-answer flashcards from uploaded study materials. These flashcards support active recall learning and provide users with an effective revision tool.
-
----
-
-## Evaluation Against Milestone 1 Goals
-
-The primary objective of Milestone 1 was to establish a complete workflow from study material submission to AI-generated outputs.
-
-This objective has been successfully achieved through:
-
-- Frontend-backend integration
-- OpenAI API integration
-- TXT file upload support
-- PDF file upload support
-- Key point extraction
-- Flashcard generation
-- Functional and responsive user interface
-
-The current implementation demonstrates a working proof of concept and establishes a strong foundation for future development. Planned future enhancements include summary sheet generation, content persistence, and additional study support features.
-
-# 7. Documentation of System
-
-## Overview
-
-The Orbital Study Tool follows a client-server architecture consisting of a React frontend, an Express backend, and the OpenAI API.
-
-The frontend is responsible for user interaction and displaying results, while the backend handles file processing, AI communication, and response generation.
-
----
-
-## Frontend Components
-
-### App.jsx
-
-The main frontend component is responsible for:
-
-- Accepting user input
-- Handling TXT and PDF uploads
-- Sending requests to the backend
-- Displaying generated key points
-- Displaying generated flashcards
-- Managing loading states and error messages
-
-### User Interface
-
-The user interface consists of:
-
-- Input Notes section
-- File Upload section
-- Extract Key Points button
-- Generate Flashcards button
-- Key Points display area
-- Flashcards display area
-
-The interface is designed to provide a simple workflow from study material submission to revision material generation.
-
----
-
-## Backend Components
-
-### server.js
-
-The backend is implemented using Node.js and Express.
-
-Responsibilities include:
-
-- Receiving requests from the frontend
-- Processing study materials
-- Communicating with the OpenAI API
-- Returning generated outputs
-- Handling errors and validation
+- Receiving frontend requests
+- Validating authentication tokens
+- Processing uploaded content
+- Constructing prompts for OpenAI
+- Generating AI-powered study materials
+- Managing Firestore operations
+- Returning generated results
 
 The backend acts as the central controller of the application.
 
 ---
 
-## API Endpoints
-
-### POST /api/process-notes
-
-#### Purpose
-
-Processes study materials and extracts key points.
-
-#### Input
-
-```json
-{
-  "notes": "study material content"
-}
-```
-
-#### Output
-
-Generated key points and important concepts extracted from the submitted content.
-
----
-
-### POST /api/generate-flashcards
-
-#### Purpose
-
-Generates flashcards from submitted study materials.
-
-#### Input
-
-```json
-{
-  "notes": "study material content"
-}
-```
-
-#### Output
-
-Question-and-answer flashcards generated from the provided study material.
-
----
-
-## File Processing
-
-### TXT File Processing
-
-Workflow:
-
-1. User uploads a TXT file.
-2. The frontend reads the file contents.
-3. Extracted text is placed into the input field.
-4. Content is sent to the backend for AI processing.
-
----
-
-### PDF File Processing
-
-Workflow:
-
-1. User uploads a PDF file.
-2. The frontend uses pdfjs-dist to extract text.
-3. Extracted content is displayed in the input area.
-4. Content is sent to the backend.
-5. AI-generated outputs are returned to the user.
-
-This allows users to work directly with lecture notes, study guides, and educational materials stored as PDF documents.
-
----
-
-## External Services
-
-### OpenAI API
+## OpenAI Integration
 
 The application uses the OpenAI API to generate educational content.
 
-Current use cases include:
+Current AI functionalities include:
 
-- Key point extraction
+- Automatic key point extraction
 - Flashcard generation
+- Individual summaries
+- Subject summary sheets
 
-The API receives processed study materials and returns structured outputs suitable for revision and learning.
+The backend constructs specialised prompts for each feature before submitting requests to the language model.
+
+---
+
+## Firebase Authentication
+
+Firebase Authentication manages user login and identity verification.
+
+Each authenticated user receives a secure token that is verified by the backend before any database operations are performed.
+
+Authentication ensures:
+
+- User privacy
+- Secure access control
+- Personalised study libraries
+
+---
+
+## Firebase Firestore
+
+Firestore serves as the application's cloud database.
+
+Each saved note contains:
+
+- User ID
+- Subject
+- Note title
+- Original uploaded notes
+- Extracted key points
+- Flashcards
+- Individual summary
+- Timestamp
+
+This enables users to retrieve and organise study materials across multiple sessions.
+
+---
+
+## File Processing Pipeline
+
+### Manual Text
+
+1. User pastes notes.
+2. Frontend sends text directly to backend.
+3. Backend performs AI processing.
+
+---
+
+### PDF Documents
+
+1. User uploads PDF.
+2. pdfjs-dist extracts text.
+3. Extracted text is sent to backend.
+4. Backend performs AI generation.
+
+---
+
+### Images
+
+1. User uploads image.
+2. Tesseract OCR extracts text.
+3. Extracted text is sent to backend.
+4. Backend performs AI processing.
+
+---
+
+## Data Flow
+
+The complete data flow within Stitch.io is summarised below.
+
+1. User authenticates.
+2. User selects a subject.
+3. User uploads study materials.
+4. Frontend extracts text if necessary.
+5. Backend processes uploaded content.
+6. OpenAI generates educational outputs.
+7. Generated content is returned to the frontend.
+8. User saves generated materials.
+9. Firestore stores user-specific notes.
+10. Users retrieve saved notes or generate subject summary sheets.
+
+# 5. Development Plan
+
+The project followed an incremental development approach, with each milestone building upon the previous one. Rather than implementing every feature simultaneously, we prioritised establishing a stable end-to-end workflow before progressively introducing more advanced functionality.
+
+---
+
+## Milestone 1 – Technical Proof of Concept
+
+### Objectives
+
+- Establish frontend-backend communication.
+- Integrate the OpenAI API.
+- Support manual text input.
+- Support PDF document uploads.
+- Implement automatic key point extraction.
+- Generate AI-powered flashcards.
+- Build a complete workflow from user input to generated outputs.
+
+### Deliverables
+
+Completed:
+
+- React frontend
+- Express backend
+- OpenAI API integration
+- Manual text input
+- PDF upload support
+- Automatic key point extraction
+- Flashcard generation
+- Responsive user interface
+- Error handling and loading indicators
+
+Milestone 1 successfully demonstrated a working proof of concept that transformed uploaded study materials into AI-generated revision resources.
+
+---
+
+## Milestone 2 – Prototype Development
+
+### Objectives
+
+- Add image upload support.
+- Integrate OCR processing.
+- Implement summary generation.
+- Introduce user authentication.
+- Integrate Firebase Firestore.
+- Enable persistent storage of generated notes.
+- Improve overall interface and usability.
+
+### Deliverables
+
+Completed:
+
+- Image upload
+- OCR using Tesseract.js
+- Individual note summaries
+- Firebase Authentication
+- Firestore integration
+- Save and retrieve notes
+- Subject management
+- Improved UI
+
+Milestone 2 expanded the application into a fully functional prototype capable of supporting multiple users and persistent cloud storage.
+
+---
+
+## Milestone 3 – Extended Features
+
+### Objectives
+
+- Implement subject summary sheets.
+- Improve study workflow.
+- Introduce Study Mode.
+- Improve AI-generated outputs.
+- Refine overall user experience.
+
+### Deliverables
+
+Completed:
+
+- Subject Summary Sheet generation
+- Study Mode
+- Improved AI prompts
+- Better organisation of saved notes
+- Enhanced frontend interface
+- Improved backend architecture
+
+The final version of Stitch.io now supports an end-to-end workflow from note submission to long-term revision management.
+
+---
+
+# 6. Current Progress and Technical Proof
+
+## Current Implementation Status
+
+The current implementation successfully supports the complete workflow of Stitch.io.
+
+Implemented features include:
+
+### Authentication
+
+- User login
+- Firebase Authentication
+- User-specific study materials
+
+### Study Material Processing
+
+- Manual text input
+- PDF upload
+- Image upload
+- OCR processing
+- Automatic text extraction
+
+### AI Processing
+
+- Automatic key point extraction
+- Flashcard generation
+- Individual note summaries
+- Subject summary sheets
+
+### Database
+
+- Firebase Firestore
+- Save generated notes
+- Retrieve saved notes
+- Subject organisation
+
+### Study Features
+
+- Study Mode
+- Regeneration
+- Subject management
+
+---
+
+## Technical Proof
+
+The screenshots below demonstrate the implementation of the application's major features.
+
+### Screenshot 1 – Login Page
+
+```markdown
+![Login](screenshots/login.png)
+```
+
+Users authenticate through Firebase Authentication before accessing their personalised workspace.
+
+---
+
+### Screenshot 2 – Main Dashboard
+
+```markdown
+![Dashboard](screenshots/dashboard.png)
+```
+
+The dashboard allows users to create subjects, upload notes, generate study materials, and manage saved content.
+
+---
+
+### Screenshot 3 – Upload Study Materials
+
+```markdown
+![Upload](screenshots/upload.png)
+```
+
+Users may upload PDFs, images, or manually paste text.
+
+---
+
+### Screenshot 4 – Automatic Key Point Extraction
+
+```markdown
+![Key Points](screenshots/keypoints.png)
+```
+
+The application automatically extracts important concepts immediately after processing uploaded study materials.
+
+---
+
+### Screenshot 5 – Flashcard Generation
+
+```markdown
+![Flashcards](screenshots/flashcards.png)
+```
+
+Flashcards are generated using the extracted key points to support active recall learning.
+
+---
+
+### Screenshot 6 – Individual Summary
+
+```markdown
+![Summary](screenshots/summary.png)
+```
+
+The application generates concise summaries that condense lengthy notes into revision-friendly formats.
+
+---
+
+### Screenshot 7 – Saved Notes
+
+```markdown
+![Saved Notes](screenshots/savednotes.png)
+```
+
+Generated materials are stored securely in Firestore and organised by subject.
+
+---
+
+### Screenshot 8 – Subject Summary Sheet
+
+```markdown
+![Subject Summary](screenshots/subjectsummary.png)
+```
+
+Multiple saved notes are combined into a comprehensive module-wide revision sheet.
+
+---
+
+## Evaluation
+
+The project successfully achieved its original objectives.
+
+Compared to the initial proof of concept, Stitch.io has evolved into a complete AI-assisted revision platform supporting:
+
+- Secure authentication
+- Cloud storage
+- Multi-format note submission
+- OCR processing
+- AI-powered study material generation
+- Subject organisation
+- Long-term revision management
+
+---
+
+# 7. Documentation of System
+
+## Frontend
+
+The frontend is implemented using React and Vite.
+
+Responsibilities include:
+
+- Authentication
+- Subject management
+- File uploads
+- OCR processing
+- PDF extraction
+- API communication
+- Displaying generated outputs
+- Managing Study Mode
+
+---
+
+## Backend
+
+The backend is implemented using Express.js.
+
+Responsibilities include:
+
+- AI prompt construction
+- Authentication verification
+- Firestore communication
+- API request handling
+- Error handling
+- Generation of revision materials
+
+---
+
+## Database
+
+Firebase Firestore stores all user-generated content.
+
+Each document contains:
+
+- User ID
+- Subject
+- Note title
+- Original notes
+- Key points
+- Flashcards
+- Summary
+- Timestamp
+
+---
+
+## API Endpoints
+
+### POST `/api/keypoints`
+
+Generates key points from uploaded notes.
+
+Input:
+
+```json
+{
+  "notes": "Study material"
+}
+```
+
+---
+
+### POST `/api/flashcards`
+
+Generates flashcards.
+
+Input:
+
+```json
+{
+  "notes": "Study material"
+}
+```
+
+---
+
+### POST `/api/summary`
+
+Generates an individual summary.
+
+Input:
+
+```json
+{
+  "notes": "Study material"
+}
+```
+
+---
+
+### POST `/api/save`
+
+Stores generated study materials inside Firestore.
+
+---
+
+### GET `/saved-notes/:subject`
+
+Retrieves all saved notes belonging to a subject.
+
+---
+
+### POST `/api/subject-summary`
+
+Generates a summary sheet using every saved note within a subject.
 
 ---
 
 ## Error Handling
 
-The application includes basic error handling mechanisms:
+The application includes:
 
 - Empty input validation
-- API request error handling
-- File upload validation
-- Processing status indicators
+- Authentication verification
+- File validation
+- OCR validation
+- API error handling
+- Firestore error handling
+- Loading indicators
 
-These mechanisms help improve reliability and provide feedback to users when issues occur.
+These mechanisms improve reliability while providing meaningful feedback to users.
 
 ---
-
-## Current Limitations
-
-The current version of the system has several limitations:
-
-- Generated content quality depends on the uploaded study material.
-- Very large documents may increase processing time.
-- Generated outputs cannot currently be saved.
-- Summary sheet generation has not yet been implemented.
-
-These limitations will be addressed in future development milestones.
 
 # 8. Installation and Setup
 
 ## Prerequisites
 
-Before running the application, ensure that the following software is installed:
+Before running Stitch.io, install:
 
 - Node.js
 - npm
 - Git
-- Visual Studio Code (recommended)
 
-An OpenAI API key is also required for AI-powered functionality.
+You will also require:
+
+- OpenAI API Key
+- Firebase Project
+- Firebase Service Account Key
 
 ---
 
@@ -639,7 +909,7 @@ cd orbital-study-tool
 
 ---
 
-## Install Frontend Dependencies
+## Install Frontend
 
 ```bash
 cd frontend
@@ -648,10 +918,10 @@ npm install
 
 ---
 
-## Install Backend Dependencies
+## Install Backend
 
 ```bash
-cd ../backend
+cd backend
 npm install
 ```
 
@@ -659,23 +929,24 @@ npm install
 
 ## Environment Variables
 
-Create a `.env` file inside the `backend` directory.
-
-Example:
+Create a `.env` file inside the backend folder.
 
 ```env
 OPENAI_API_KEY=your_openai_api_key
 ```
 
+Place the Firebase service account inside:
+
+```text
+backend/firebase-key.json
+```
+
 ---
 
-## Running the Backend
-
-Navigate to the backend directory and start the server:
+## Run Backend
 
 ```bash
-cd backend
-node server.js
+npm run dev
 ```
 
 Expected output:
@@ -686,9 +957,7 @@ Server running on http://localhost:3000
 
 ---
 
-## Running the Frontend
-
-Open a second terminal and navigate to the frontend directory:
+## Run Frontend
 
 ```bash
 cd frontend
@@ -698,106 +967,56 @@ npm run dev
 Expected output:
 
 ```text
-Local: http://localhost:5173/
-```
-
----
-
-## Accessing the Application
-
-Open the following URL in a web browser:
-
-```text
 http://localhost:5173
 ```
-
-The application should display the Orbital Study Tool homepage.
-
----
-
-## Using the Application
-
-### Option 1: Paste Notes
-
-1. Copy study materials.
-2. Paste them into the input area.
-3. Click **Extract Key Points** or **Generate Flashcards**.
-
-### Option 2: Upload Study Materials
-
-1. Click **Choose File**.
-2. Select a TXT or PDF document.
-3. Wait for the text to be extracted.
-4. Click **Extract Key Points** or **Generate Flashcards**.
-
----
-
-## Supported File Types
-
-Currently supported:
-
-- TXT
-- PDF
-
-Future versions may support additional document formats.
 
 ---
 
 ## Repository Structure
 
 ```text
-orbital-study-tool/
+orbital-study-tool
 │
-├── frontend/
-│   ├── src/
-│   ├── public/
+├── frontend
+│   ├── src
+│   ├── public
 │   └── package.json
 │
-├── backend/
+├── backend
 │   ├── server.js
+│   ├── firebase.js
+│   ├── firebase-key.json
 │   ├── package.json
 │   └── .env
 │
-├── screenshots/
+├── screenshots
 │
 └── README.md
 ```
 
+---
+
 # 9. Future Work
 
-The current implementation establishes the foundation of the Orbital Study Tool. Future development will focus on expanding functionality, improving usability, and enhancing the overall learning experience.
+Although Stitch.io already provides a complete AI-assisted revision workflow, several enhancements can further improve the learning experience.
 
-## Feature 3: Summary Sheet Generation
+## Planned Improvements
 
-A structured summary sheet generation feature will be implemented to provide users with concise revision notes derived from uploaded study materials. This feature will complement flashcard generation by offering an alternative revision format.
-
----
-
-## Saving Generated Content
-
-Users will be able to save generated flashcards, key points, and summary sheets for future access. This will allow users to build a personal repository of study materials over time.
-
----
-
-## Editing and Regeneration
-
-Users will be able to edit AI-generated content and regenerate outputs if they are not satisfied with the initial results. This will provide greater flexibility and customisation.
-
----
-
-## Study Mode
-
-A dedicated study interface will be introduced to allow users to review flashcards directly within the application. Features such as card flipping, progress tracking, and revision sessions may be included.
-
----
-
-## Export Functionality
-
-Users will be able to export generated study materials into downloadable formats for offline revision and sharing.
+- Export flashcards as Anki decks
+- Export summaries as PDF
+- Rich text editing before saving
+- AI-generated quizzes
+- Smart recommendations based on previous notes
+- Spaced repetition scheduling
+- Dark mode
+- Collaborative note editing
 
 ---
 
 ## Long-Term Vision
 
-The long-term goal of the Orbital Study Tool is to provide students with an integrated AI-assisted revision platform that transforms raw study materials into personalised learning resources. By automating repetitive preparation tasks, the application aims to help students spend more time learning and less time organising study materials.
+Our long-term vision is for Stitch.io to become an integrated AI-powered learning platform that supports students throughout an entire semester.
 
+Rather than functioning solely as a flashcard generator or summarisation tool, Stitch.io aims to become a personal knowledge management system where students can continuously upload notes, organise them by subject, generate revision resources, and revisit them throughout their academic journey.
+
+By automating repetitive preparation tasks while preserving user control over the learning process, Stitch.io seeks to help students spend less time organising study materials and more time understanding, practising, and mastering concepts.
