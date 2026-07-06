@@ -9,6 +9,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
+import jsPDF from "jspdf";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -463,8 +464,69 @@ function App() {
   } catch (error) {
     console.error("Error deleting note:", error);
     alert("Failed to delete note");
-  }
-}
+  }}
+
+  const exportNoteAsPDF = (note) => {
+    const doc = new jsPDF();
+
+    let y = 20;
+    const pageHeight = doc.internal.pageSize.height;
+    const margin = 15;
+    const lineHeight = 8;
+    const maxWidth = 180;
+
+    const addText = (text) => {
+      if (!text) return;
+
+      const lines = doc.splitTextToSize(text, maxWidth);
+
+      lines.forEach((line) => {
+        if (y > pageHeight - 20) {
+          doc.addPage();
+          y = 20;
+        }
+
+        doc.text(line, margin, y);
+        y += lineHeight;
+      });
+
+      y += 4;
+    };
+
+    doc.setFontSize(18);
+    doc.text(note.title || "Exported Note", margin, y);
+    y += 12;
+
+    doc.setFontSize(12);
+    addText(`Subject: ${note.subject || "No subject"}`);
+
+    doc.setFontSize(14);
+    addText("Original Notes:");
+    doc.setFontSize(11);
+    addText(note.originalText || note.notes || "");
+
+    doc.setFontSize(14);
+    addText("Key Points:");
+    doc.setFontSize(11);
+    addText(note.keyPoints || "");
+
+    doc.setFontSize(14);
+    addText("Flashcards:");
+    doc.setFontSize(11);
+    if (Array.isArray(note.flashcards)) {
+      note.flashcards.forEach((card, index) => {
+        addText(`Q${index + 1}: ${card.question}`);
+        addText(`A${index + 1}: ${card.answer}`);
+      });
+    }
+
+    doc.setFontSize(14);
+    addText("Summary:");
+    doc.setFontSize(11);
+    addText(note.summary || note.summarySheet || "");
+
+    doc.save(`${note.title || "stitch-note"}.pdf`);
+  };
 
   if (!user) {
     return (
@@ -818,6 +880,13 @@ function App() {
           <div style={styles.savedNoteCard}>
             <div style={styles.savedNoteHeader}>
               <h3>{selectedSavedNote.title || "Untitled Note"}</h3>
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button
+                  style={styles.secondaryButton}
+                  onClick={() => exportNoteAsPDF(selectedSavedNote)}
+                >
+                  Export Note
+                </button>
               <button
                 style={styles.deleteButton}
                 onClick={() => deleteSavedNote(selectedSavedNote.id)}
@@ -825,6 +894,7 @@ function App() {
                 Delete Note
               </button>
             </div>
+          </div>
 
             <div style={styles.tabRow}>
               <button
