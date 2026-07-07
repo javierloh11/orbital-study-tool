@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tiptap/react": "^3.27.3",
+    "@tiptap/starter-kit": "^3.27.3",
     "firebase": "^12.15.0",
     "jspdf": "^4.2.1",
     "pdfjs-dist": "^5.7.284",

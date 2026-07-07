@@ -10,6 +10,8 @@ import {
   signOut,
 } from "firebase/auth";
 import jsPDF from "jspdf";
+import RichTextEditor from "./RichTextEditor";
+import html2canvas from "html2canvas";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -39,6 +41,9 @@ function App() {
   const [activeTab, setActiveTab] = useState("keypoints");
 
   const [savedNoteTab, setSavedNoteTab] = useState("original");
+
+  const [formattedNote, setFormattedNote] = useState("");
+  const [editorSource, setEditorSource] = useState("notes");
 
   async function fetchSubjects(currentUser = user) {
     try {
@@ -170,7 +175,7 @@ function App() {
         const text = await file.text();
         setNotes(text);
         setActiveTab("keypoints")
-        alert("Image text extracted. Please review and edit the text before generating key points.");
+        alert("Text file loaded. Please review and edit the text before generating key points.");
       } catch (err) {
         console.error(err);
         setError("Failed to read text file.");
@@ -215,7 +220,8 @@ function App() {
         const imageText = result.data.text.trim();
 
         setNotes(imageText);
-        await extractKeyPoints(imageText);
+        setActiveTab("keypoints");
+        alert("Image text extracted. Please review and edit it before generating key points.");
       } catch (err) {
         console.error(err);
         setError("Failed to read image file.");
@@ -494,6 +500,7 @@ function App() {
       y += 4;
     };
 
+
     doc.setFontSize(18);
     doc.text(note.title || "Exported Note", margin, y);
     y += 12;
@@ -527,6 +534,39 @@ function App() {
     addText(note.summary || note.summarySheet || "");
 
     doc.save(`${note.title || "stitch-note"}.pdf`);
+  };
+
+  const exportEditorAsImage = async () => {
+    const element = document.getElementById("export-note-area");
+
+    if(!element) {
+      alert("No editor content found.");
+      return;
+    }
+
+    const canvas = await html2canvas(element);
+    const image = canvas.toDataURL("image/png");
+
+    const link = document.createElement("a");
+    link.href = image;
+    link.download = `${noteTitle || "stitch-note"}.png`;
+    link.click();
+  };
+
+  const loadEditorContent = (source) => {
+    setEditorSource(source);
+
+    if (source === "notes") {
+       setFormattedNote(notes);
+    } else if (source === "keypoints") {
+       setFormattedNote(keyPoints);
+    } else if (source === "summary") {
+       setFormattedNote(summary);
+    } else if (source === "subjectSummary") {
+      setFormattedNote(subjectSummary);
+    }
+
+     setActiveTab("editor");
   };
 
   if (!user) {
@@ -743,12 +783,42 @@ function App() {
             </button>
 
             <button
+              style={activeTab === "editor" ? styles.activeTab : styles.tabButton}
+              onClick={() => loadEditorContent("notes")}
+            >
+              Note Editor
+            </button>
+
+            <button
               style={activeTab === "saved" ? styles.activeTab : styles.tabButton}
               onClick={() => setActiveTab("saved")}
             >
               Saved Notes
             </button>
           </div>
+
+          {activeTab === "editor" && (
+            <>
+              <h2 style={styles.heading}>Edit Note for Export</h2>
+              
+              <p style={styles.helperText}>
+                Format your note before exporting. This does not affect AI generation
+              </p>
+              
+              <div style={styles.richEditorBox} id="export-note-area">
+                <RichTextEditor
+                  content={formattedNote}
+                  setContent={setFormattedNote}
+                />
+              </div>
+
+              <div style={{ marginTop: "20px"}}>
+                <button style={styles.button} onClick={exportEditorAsImage}>
+                  Export as Image
+                </button>
+              </div>
+            </>
+          )}
 
           {activeTab === "keypoints" && (
             <>
@@ -1093,6 +1163,16 @@ const styles = {
     backgroundColor: "white",
     color: "#111827",
     boxSizing: "border-box",
+  },
+
+  richEditorBox: {
+    border: "1px solid #d1d5db",
+    borderRadius: "10px",
+    padding: "18px",
+    minHeight: "300px",
+    backgroundColor: "white",
+    color: "#111827",
+    lineHeight: "1.7",
   },
 
   input: {
