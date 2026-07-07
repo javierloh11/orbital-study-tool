@@ -169,7 +169,8 @@ function App() {
 
         const text = await file.text();
         setNotes(text);
-        await extractKeyPoints(text);
+        setActiveTab("keypoints")
+        alert("Image text extracted. Please review and edit the text before generating key points.");
       } catch (err) {
         console.error(err);
         setError("Failed to read text file.");
@@ -619,13 +620,17 @@ function App() {
   value={noteTitle}
   onChange={(e) => setNoteTitle(e.target.value)}
 />
+        <p style={styles.helperText}>
+          Review and edit your notes here before generating study materials.
+          For OCR image uploads, clean up any inaccurate text before continuing.
+        </p>
 
-          <textarea
-            style={styles.textarea}
-            placeholder="Paste your notes here..."
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
+        <textarea
+          style={styles.textarea}
+          placeholder="Paste your notes here..."
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+        />
 
           <div style={styles.uploadBox}>
             <p style={styles.uploadText}>
