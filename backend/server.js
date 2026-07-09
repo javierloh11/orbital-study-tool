@@ -125,13 +125,50 @@ app.post("/api/summary", async (req, res) => {
     }
 
     const prompt = `
-Create a concise study summary using ONLY the key points below.
+You are an academic revision assistant.
+
+Create a HIGH-YIELD EXAM CHEAT SHEET using ONLY the key points below.
 
 Rules:
-- Maximum 250 words
-- Use bullet points
-- Keep explanations concise
-- Focus on understanding and revision
+- Use Markdown.
+- Do not write long paragraphs.
+- Use short bullet points.
+- Keep each bullet under 20 words where possible.
+- Bold important keywords.
+- Avoid repeated points.
+- Do not invent information not found in the key points.
+- Omit sections that are not relevant.
+- If the topic benefits from a diagram, include ONE Mermaid diagram inside a mermaid code block.
+
+Use this structure:
+
+# HIGH-YIELD SUMMARY SHEET
+
+## Overview
+- Give 2–3 bullets explaining the overall topic.
+
+## Core Concepts
+- Explain the most important ideas.
+- Start each bullet with a bold keyword.
+
+## Key Definitions
+- Include important terms and definitions.
+
+## Processes / Workflows
+- Include steps, sequences, algorithms, or procedures if relevant.
+
+## Formulas / Code / Rules
+- Include formulas, code logic, rules, or syntax if relevant.
+
+## Visual Summary
+Only include this section if a visual helps.
+Use Mermaid syntax.
+
+## Common Mistakes
+- Include likely mistakes students may make.
+
+## Memory Tips
+- Include short ways to remember difficult ideas.
 
 Key Points:
 ${keyPoints}
