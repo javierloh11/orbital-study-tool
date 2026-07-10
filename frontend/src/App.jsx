@@ -1,4 +1,3 @@
-import { useState } from "react";
 import "./App.css";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.mjs?url";
@@ -12,8 +11,50 @@ import {
 import jsPDF from "jspdf";
 import RichTextEditor from "./RichTextEditor";
 import html2canvas from "html2canvas";
+import { useEffect, useRef, useState} from "react";
+import ReactMarkdown from "react-markdown";
+import mermaid from "mermaid";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+
+function MermaidDiagram({ chart }) {
+  const containerRef = useRef(null);
+  const diagramIdRef = useRef(
+    `mermaid-${Math.random().toString(36).substring(2, 10)}`
+  );
+
+  useEffect(() => {
+    async function renderDiagram() {
+      if (!containerRef.current || !chart?.trim()) return;
+
+      try {
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: "strict",
+          theme: "default",
+        });
+
+        const { svg } = await mermaid.render(
+          diagramIdRef.current,
+          chart.trim()
+        );
+
+        containerRef.current.innerHTML = svg;
+      } catch (error) {
+        console.error("Mermaid render error:", error);
+
+        if (containerRef.current) {
+          containerRef.current.textContent =
+            "Unable to display this diagram.";
+        }
+      }
+    }
+
+    renderDiagram();
+  }, [chart]);
+
+  return <div ref={containerRef} className="mermaid-diagram" />;
+}
 
 function App() {
   const [user, setUser] = useState(null);
@@ -897,13 +938,42 @@ function App() {
           )}
 
           {activeTab === "summary" && (
-            <>
-              <h2 style={styles.heading}>Summary Sheet</h2>
-              <div style={styles.output}>
-                {summary || "No summary sheet generated yet."}
-              </div>
-            </>
-          )}
+  <>
+    <h2 style={styles.heading}>Summary Sheet</h2>
+
+    <div style={styles.output}>
+      {summary ? (
+        <ReactMarkdown
+          components={{
+            code({ className, children, ...props }) {
+              const languageMatch = /language-(\w+)/.exec(
+                className || ""
+              );
+
+              if (languageMatch?.[1] === "mermaid") {
+                return (
+                  <MermaidDiagram
+                    chart={String(children).replace(/\n$/, "")}
+                  />
+                );
+              }
+
+              return (
+                <code className={className} {...props}>
+                  {children}
+                </code>
+              );
+            },
+          }}
+        >
+          {summary}
+        </ReactMarkdown>
+      ) : (
+        "No summary sheet generated yet."
+      )}
+    </div>
+  </>
+)}
 
           {activeTab === "saved" && (
   <>

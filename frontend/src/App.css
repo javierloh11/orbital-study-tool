@@ -182,3 +182,20 @@
     border-right-color: var(--border);
   }
 }
+
+.mermaid-diagram {
+  width: 100%;
+  overflow-x: auto;
+  margin: 24px 0;
+  padding: 16px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.mermaid-diagram svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}

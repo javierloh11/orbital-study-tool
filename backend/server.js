@@ -125,50 +125,80 @@ app.post("/api/summary", async (req, res) => {
     }
 
     const prompt = `
-You are an academic revision assistant.
+You are an experienced university professor creating a one-page revision sheet for students preparing the night before an exam.
 
-Create a HIGH-YIELD EXAM CHEAT SHEET using ONLY the key points below.
+Your objective is NOT to rewrite the lecture notes.
+
+Your objective is to identify only the highest-value concepts students should remember.
+
+Before writing the summary:
+
+1. Read all the key points.
+2. Rank every concept by importance.
+3. Keep only the most important concepts.
+4. Remove repeated or low-value information.
+5. Present the information as a concise revision sheet.
 
 Rules:
+- Maximum 500 words.
 - Use Markdown.
-- Do not write long paragraphs.
-- Use short bullet points.
-- Keep each bullet under 20 words where possible.
-- Bold important keywords.
-- Avoid repeated points.
-- Do not invent information not found in the key points.
-- Omit sections that are not relevant.
-- If the topic benefits from a diagram, include ONE Mermaid diagram inside a mermaid code block.
+- Use bullet points only.
+- Maximum 5 bullet points per section.
+- Maximum 15 words per bullet where possible.
+- Every bullet must contain a unique idea.
+- Do NOT repeat information across sections.
+- Prioritise concepts likely to appear in exams.
+- Omit any section that is not relevant.
+- Do not invent information not present in the notes.
+
+Do NOT include:
+- Long explanations
+- Lecture administration
+- Repeated definitions
+- Trivial examples
+- Duplicate code snippets
+- Multiple examples of the same concept
 
 Use this structure:
 
 # HIGH-YIELD SUMMARY SHEET
 
 ## Overview
-- Give 2–3 bullets explaining the overall topic.
+Summarise the entire topic in at most 2 bullet points.
 
 ## Core Concepts
-- Explain the most important ideas.
-- Start each bullet with a bold keyword.
+Include only the FIVE most important concepts.
+Each bullet should begin with a bold keyword.
 
 ## Key Definitions
-- Include important terms and definitions.
+Only include terms students are expected to memorise.
 
 ## Processes / Workflows
-- Include steps, sequences, algorithms, or procedures if relevant.
+Only include this section if the lecture contains a genuine process, algorithm, workflow, or sequence of steps.
+Otherwise omit this section entirely.
 
 ## Formulas / Code / Rules
-- Include formulas, code logic, rules, or syntax if relevant.
+Only include syntax, formulas, rules or code patterns worth remembering.
 
 ## Visual Summary
-Only include this section if a visual helps.
-Use Mermaid syntax.
+Only include this section if a visual diagram would significantly improve understanding.
+
+Generate ONE Mermaid diagram.
+
+Wrap it exactly like this:
+
+\`\`\`mermaid
+flowchart TD
+A --> B
+\`\`\`
+
+If no useful diagram exists, omit this section.
 
 ## Common Mistakes
-- Include likely mistakes students may make.
+Include only common mistakes students make in exams or assignments.
 
 ## Memory Tips
-- Include short ways to remember difficult ideas.
+Provide short memory cues or mnemonics.
 
 Key Points:
 ${keyPoints}
