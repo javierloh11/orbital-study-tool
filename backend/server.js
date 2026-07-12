@@ -287,6 +287,7 @@ app.post("/save-note", verifyUser, async (req, res) => {
   keyPoints,
   flashcards,
   summary,
+  layout,
   sourceType,
 } = req.body;
 
@@ -317,6 +318,7 @@ app.post("/save-note", verifyUser, async (req, res) => {
   keyPoints: keyPoints || "",
   flashcards: flashcards || [],
   summary: summary || "",
+  layout: layout || null,
   sourceType: sourceType || "text",
   createdAt: new Date(),
 });

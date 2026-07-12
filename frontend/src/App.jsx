@@ -9,7 +9,7 @@ import {
   signOut,
 } from "firebase/auth";
 import jsPDF from "jspdf";
-import RichTextEditor from "./RichTextEditor";
+import CheatSheetEditor from "./CheatSheetEditor";
 import html2canvas from "html2canvas";
 import { useEffect, useRef, useState} from "react";
 import ReactMarkdown from "react-markdown";
@@ -83,8 +83,8 @@ function App() {
 
   const [savedNoteTab, setSavedNoteTab] = useState("original");
 
-  const [formattedNote, setFormattedNote] = useState("");
-  const [editorSource, setEditorSource] = useState("notes");
+  const [cheatSheetLayout, setCheatSheetLayout] = useState(null);
+  const editorRef = useRef(null);
 
   async function fetchSubjects(currentUser = user) {
     try {
@@ -384,6 +384,7 @@ function App() {
           keyPoints,
           flashcards,
           summary,
+          layout: cheatSheetLayout,
           sourceType: "text",
         }),
       });
@@ -577,37 +578,26 @@ function App() {
     doc.save(`${note.title || "stitch-note"}.pdf`);
   };
 
-  const exportEditorAsImage = async () => {
-    const element = document.getElementById("export-note-area");
-
-    if(!element) {
-      alert("No editor content found.");
-      return;
-    }
-
-    const canvas = await html2canvas(element);
-    const image = canvas.toDataURL("image/png");
-
-    const link = document.createElement("a");
-    link.href = image;
-    link.download = `${noteTitle || "stitch-note"}.png`;
-    link.click();
-  };
-
   const loadEditorContent = (source) => {
-    setEditorSource(source);
+    let text = "";
+    if (source === "notes") text = notes;
+    else if (source === "keypoints") text = keyPoints;
+    else if (source === "summary") text = summary;
+    else if (source === "subjectSummary") text = subjectSummary;
 
-    if (source === "notes") {
-       setFormattedNote(notes);
-    } else if (source === "keypoints") {
-       setFormattedNote(keyPoints);
-    } else if (source === "summary") {
-       setFormattedNote(summary);
-    } else if (source === "subjectSummary") {
-      setFormattedNote(subjectSummary);
-    }
+    const html =
+      "<p>" +
+      (text || "")
+        .split("\n")
+        .filter((l) => l.trim().length)
+        .map((l) => l.replace(/</g, "&lt;").replace(/>/g, "&gt;"))
+        .join("</p><p>") +
+      "</p>";
 
-     setActiveTab("editor");
+    setActiveTab("editor");
+    setTimeout(() => {
+      editorRef.current?.addTextBlock(html || "<p>(empty)</p>");
+    }, 0); 
   };
 
   if (!user) {
@@ -846,18 +836,12 @@ function App() {
                 Format your note before exporting. This does not affect AI generation
               </p>
               
-              <div style={styles.richEditorBox} id="export-note-area">
-                <RichTextEditor
-                  content={formattedNote}
-                  setContent={setFormattedNote}
-                />
-              </div>
-
-              <div style={{ marginTop: "20px"}}>
-                <button style={styles.button} onClick={exportEditorAsImage}>
-                  Export as Image
-                </button>
-              </div>
+              <CheatSheetEditor
+                ref={editorRef}
+                initialPages={cheatSheetLayout}
+                onChange={setCheatSheetLayout}
+                exportFileName={noteTitle || "stitch-cheat-sheet"}
+              />
             </>
           )}
 
