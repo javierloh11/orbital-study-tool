@@ -219,80 +219,89 @@ app.post("/api/summary", async (req, res) => {
     }
 
     const prompt = `
-You are an experienced university professor creating a one-page revision sheet for students preparing the night before an exam.
+You are an experienced university professor creating a concise exam revision sheet.
 
-Your objective is NOT to rewrite the lecture notes.
+Your goal is NOT to rewrite the lecture notes.
 
-Your objective is to identify only the highest-value concepts students should remember.
+Your goal is to produce a high-quality cheat sheet that a student can read in under 5 minutes before an exam.
 
-Before writing the summary:
+Before writing:
 
 1. Read all the key points.
-2. Rank every concept by importance.
-3. Keep only the most important concepts.
-4. Remove repeated or low-value information.
-5. Present the information as a concise revision sheet.
+2. Identify the most examinable concepts.
+3. Remove duplicated or low-value information.
+4. Merge similar ideas.
+5. Organise the information into a clean revision sheet.
 
-Rules:
-- Maximum 500 words.
-- Use Markdown.
-- Use bullet points only.
-- Maximum 5 bullet points per section.
+Requirements:
+- Maximum 400 words.
+- Use Markdown only.
+- Do NOT include an overall title.
+- Begin immediately with the first section heading.
+- Use concise bullet points only.
+- Maximum 5 bullets per section.
 - Maximum 15 words per bullet where possible.
-- Every bullet must contain a unique idea.
-- Do NOT repeat information across sections.
-- Prioritise concepts likely to appear in exams.
-- Omit any section that is not relevant.
-- Do not invent information not present in the notes.
+- One unique idea per bullet.
+- Avoid repeating information between sections.
+- Do not invent information.
+- Omit sections that are not useful for this topic.
 
-Do NOT include:
-- Long explanations
-- Lecture administration
-- Repeated definitions
-- Trivial examples
-- Duplicate code snippets
-- Multiple examples of the same concept
-
-Use this structure:
-
-# HIGH-YIELD SUMMARY SHEET
+Use the following structure:
 
 ## Overview
-Summarise the entire topic in at most 2 bullet points.
+Summarise the lecture in at most TWO bullet points.
 
 ## Core Concepts
-Include only the FIVE most important concepts.
-Each bullet should begin with a bold keyword.
+Include exactly FIVE of the most important examinable concepts.
+Each bullet must begin with a bold concept name.
 
 ## Key Definitions
-Only include terms students are expected to memorise.
+Only include definitions students should memorise.
 
 ## Processes / Workflows
-Only include this section if the lecture contains a genuine process, algorithm, workflow, or sequence of steps.
-Otherwise omit this section entirely.
+Only include this section if the lecture contains an algorithm, workflow, sequence, or process.
 
 ## Formulas / Code / Rules
-Only include syntax, formulas, rules or code patterns worth remembering.
+Only include formulas, syntax, or code patterns worth memorising.
+Keep code snippets under three lines.
+
+## Common Mistakes
+List common exam mistakes or misconceptions.
+
+## Memory Tips
+Provide short mnemonics or quick revision tips.
 
 ## Visual Summary
-Only include this section if a visual diagram would significantly improve understanding.
+Only include this section if a diagram genuinely improves understanding.
 
-Generate ONE Mermaid diagram.
+Generate exactly ONE Mermaid flowchart.
 
-Wrap it exactly like this:
+Rules:
+- Maximum 8 nodes.
+- Keep labels short.
+- Use flowchart TD.
+- Do not include styling.
+- Avoid special characters inside node names.
+
+Wrap the diagram exactly like this:
 
 \`\`\`mermaid
 flowchart TD
-A --> B
+A[Concept]
+A --> B[Principle]
+A --> C[Application]
+C --> D[Outcome]
 \`\`\`
 
-If no useful diagram exists, omit this section.
+If a useful diagram cannot be created, omit this section entirely.
 
-## Common Mistakes
-Include only common mistakes students make in exams or assignments.
-
-## Memory Tips
-Provide short memory cues or mnemonics.
+Additional rules:
+- Never repeat the same concept.
+- Never include lecture administration.
+- Never include trivial examples.
+- Never include long explanations.
+- Never include duplicate code examples.
+- Prioritise information most likely to appear in exams.
 
 Key Points:
 ${keyPoints}

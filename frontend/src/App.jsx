@@ -985,119 +985,181 @@ function App() {
           )}
 
           {activeTab === "keypoints" && (
-            <>
-              <h2 style={styles.heading}>Key Points</h2>
-              <div style={styles.output}>
-                {keyPoints || "No key points generated yet."}
-              </div>
-            </>
-          )}
+  <section className="study-resource-sheet">
+    <header className="study-resource-header">
+      <p className="study-resource-label">AI Revision Resource</p>
+      <h2>Key Points</h2>
+      <p>
+        The most important concepts extracted from your uploaded notes.
+      </p>
+    </header>
+
+    <div className="study-resource-content">
+      {keyPoints ? (
+        <MarkdownContent content={keyPoints} />
+      ) : (
+        <p className="empty-resource-message">
+          No key points generated yet.
+        </p>
+      )}
+    </div>
+  </section>
+)}
 
           {activeTab === "flashcards" && (
-            <>
-              <h2 style={styles.heading}>Flashcards</h2>
+  <section className="study-resource-sheet">
+    <header className="study-resource-header">
+      <p className="study-resource-label">Active Recall Resource</p>
+      <h2>Flashcards</h2>
+      <p>
+        Review one question at a time and reveal the answer when ready.
+      </p>
+    </header>
 
-              {flashcards.length === 0 ? (
-                <div style={styles.output}>No flashcards generated yet.</div>
-              ) : (
-                <div style={styles.flashcardBox}>
-                  <p style={styles.cardCounter}>
-                    Card {currentCard + 1} of {flashcards.length}
-                  </p>
+    <div className="study-resource-content">
+      {flashcards.length === 0 ? (
+        <p className="empty-resource-message">
+          No flashcards generated yet.
+        </p>
+      ) : (
+        <div className="flashcard-study">
+          <div className="flashcard-progress-row">
+            <span>
+              Card {currentCard + 1} of {flashcards.length}
+            </span>
 
-                  <div style={styles.flashcard}>
-                    <h3 style={styles.flashcardLabel}>Question</h3>
-
-                    <p style={styles.flashcardText}>
-                      {flashcards[currentCard].question}
-                    </p>
-
-                    {showAnswer && (
-                      <>
-                        <h3 style={styles.flashcardLabel}>Answer</h3>
-
-                        <p style={styles.flashcardAnswer}>
-                          {flashcards[currentCard].answer}
-                        </p>
-                      </>
-                    )}
-                  </div>
-
-                  <div style={styles.flashcardControls}>
-                    <button
-                      style={styles.secondaryButton}
-                      disabled={currentCard === 0}
-                      onClick={() => {
-                        setCurrentCard((prev) => Math.max(prev - 1, 0));
-                        setShowAnswer(false);
-                      }}
-                    >
-                      Previous
-                    </button>
-
-                    <button
-                      style={styles.primaryStudyButton}
-                      onClick={() => setShowAnswer(!showAnswer)}
-                    >
-                      {showAnswer ? "Hide Answer" : "Show Answer"}
-                    </button>
-
-                    <button
-                      style={styles.secondaryButton}
-                      disabled={currentCard === flashcards.length - 1}
-                      onClick={() => {
-                        setCurrentCard((prev) =>
-                          Math.min(prev + 1, flashcards.length - 1)
-                        );
-                        setShowAnswer(false);
-                      }}
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {activeTab === "summary" && (
-  <>
-    <h2 style={styles.heading}>Summary Sheet</h2>
-
-    <div style={styles.output}>
-  <MarkdownContent
-    content={summary}
-    emptyMessage="No summary sheet generated yet."
-  />
-
-  {selectedPdfPages.length > 0 && (
-    <>
-      <h3 style={{ marginTop: "32px" }}>Lecture Visuals</h3>
-
-      <div className="lecture-visuals">
-        {selectedPdfPages.map((pageNumber) => {
-          const page = pdfPages.find(
-            (p) => p.pageNumber === pageNumber
-          );
-
-          if (!page) return null;
-
-          return (
-            <div key={page.pageNumber} className="lecture-page">
-              <h4>Page {page.pageNumber}</h4>
-
-              <img
-                src={page.imageUrl}
-                alt={`Lecture page ${page.pageNumber}`}
+            <div className="flashcard-progress-track">
+              <div
+                className="flashcard-progress-fill"
+                style={{
+                  width: `${
+                    ((currentCard + 1) / flashcards.length) * 100
+                  }%`,
+                }}
               />
             </div>
-          );
-        })}
-      </div>
-    </>
-  )}
-</div>
-  </>
+          </div>
+
+          <article className="flashcard-study-card">
+            <p className="flashcard-section-label">Question</p>
+
+            <h3 className="flashcard-question">
+              {flashcards[currentCard].question}
+            </h3>
+
+            {showAnswer ? (
+              <div className="flashcard-answer-panel">
+                <p className="flashcard-section-label">Answer</p>
+
+                <p className="flashcard-answer-text">
+                  {flashcards[currentCard].answer}
+                </p>
+              </div>
+            ) : (
+              <p className="flashcard-hidden-hint">
+                Try answering before revealing the response.
+              </p>
+            )}
+          </article>
+
+          <div className="flashcard-study-controls">
+            <button
+              className="study-control-button secondary"
+              disabled={currentCard === 0}
+              onClick={() => {
+                setCurrentCard((prev) => Math.max(prev - 1, 0));
+                setShowAnswer(false);
+              }}
+            >
+              Previous
+            </button>
+
+            <button
+              className="study-control-button primary"
+              onClick={() => setShowAnswer((current) => !current)}
+            >
+              {showAnswer ? "Hide Answer" : "Show Answer"}
+            </button>
+
+            <button
+              className="study-control-button secondary"
+              disabled={currentCard === flashcards.length - 1}
+              onClick={() => {
+                setCurrentCard((prev) =>
+                  Math.min(prev + 1, flashcards.length - 1)
+                );
+                setShowAnswer(false);
+              }}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  </section>
+)}
+
+          {activeTab === "summary" && (
+  <section className="summary-sheet">
+    <header className="summary-sheet-header">
+      <p className="summary-sheet-label">AI Revision Resource</p>
+      <h2>Summary Sheet</h2>
+      <p>
+        A concise revision guide generated from your extracted key points.
+      </p>
+    </header>
+
+    <div className="summary-sheet-content">
+      <MarkdownContent
+        content={summary}
+        emptyMessage="No summary sheet generated yet."
+      />
+    </div>
+
+    {selectedPdfPages.length > 0 && (
+      <section className="lecture-visuals-section">
+        <div className="lecture-visuals-header">
+          <div>
+            <p className="summary-sheet-label">From your uploaded notes</p>
+            <h3>Important Lecture Visuals</h3>
+          </div>
+
+          <span className="visual-count">
+            {selectedPdfPages.length} selected
+          </span>
+        </div>
+
+        <div className="lecture-visuals">
+          {selectedPdfPages.map((pageNumber) => {
+            const page = pdfPages.find(
+              (item) => item.pageNumber === pageNumber
+            );
+
+            if (!page) return null;
+
+            return (
+              <figure key={page.pageNumber} className="lecture-page">
+                <div className="lecture-page-heading">
+                  <span>Lecture visual</span>
+                  <strong>Page {page.pageNumber}</strong>
+                </div>
+
+                <img
+                  src={page.imageUrl}
+                  alt={`Important lecture visual from page ${page.pageNumber}`}
+                />
+
+                <figcaption>
+                  Automatically selected as a useful revision visual.
+                </figcaption>
+              </figure>
+            );
+          })}
+        </div>
+      </section>
+    )}
+  </section>
 )}
 
           {activeTab === "saved" && (
@@ -1260,7 +1322,7 @@ const styles = {
   },
 
   container: {
-    maxWidth: "900px",
+    maxWidth: "1200px",
     margin: "0 auto",
   },
 
