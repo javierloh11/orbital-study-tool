@@ -114,6 +114,100 @@ ${notesText}
   }
 });
 
+app.post("/api/select-visual-pages", async (req, res) => {
+  try {
+    const { pages } = req.body;
+
+    if (!Array.isArray(pages) || pages.length === 0) {
+      return res.status(400).json({
+        error: "No PDF pages provided",
+      });
+    }
+
+    const pageDescriptions = pages
+      .map(
+        (page) => `
+Page ${page.pageNumber}:
+${page.text}
+`
+      )
+      .join("\n");
+
+    const prompt = `
+You are selecting the most useful lecture pages for a revision summary sheet.
+
+Choose up to TWO pages that are most likely to contain useful:
+- diagrams
+- graphs
+- flowcharts
+- class hierarchies
+- architecture diagrams
+- relationship diagrams
+- visual processes
+- comparison tables
+
+Do not select:
+- title pages
+- administrative pages
+- pages containing only plain paragraphs
+- pages with only repetitive code examples
+- pages with little revision value
+
+Return ONLY a valid JSON array of page numbers.
+
+Example:
+[5, 11]
+
+Lecture pages:
+${pageDescriptions}
+`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4.1-mini",
+      messages: [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+    });
+
+    const aiResponse = completion.choices[0].message.content.trim();
+
+    const arrayMatch = aiResponse.match(/\[[\s\S]*?\]/);
+
+    if (!arrayMatch) {
+      return res.json({
+        selectedPages: [],
+      });
+    }
+
+    const parsedPages = JSON.parse(arrayMatch[0]);
+
+    const validPageNumbers = new Set(
+      pages.map((page) => page.pageNumber)
+    );
+
+    const selectedPages = parsedPages
+      .filter(
+        (pageNumber) =>
+          Number.isInteger(pageNumber) &&
+          validPageNumbers.has(pageNumber)
+      )
+      .slice(0, 2);
+
+    res.json({
+      selectedPages,
+    });
+  } catch (error) {
+    console.error("Failed to select visual pages:", error);
+
+    res.status(500).json({
+      error: "Failed to select visual pages",
+    });
+  }
+});
+
 app.post("/api/summary", async (req, res) => {
   try {
     const { keyPoints } = req.body;

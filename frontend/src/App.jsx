@@ -11,49 +11,113 @@ import {
 import jsPDF from "jspdf";
 import CheatSheetEditor from "./CheatSheetEditor";
 import html2canvas from "html2canvas";
-import { useEffect, useRef, useState} from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import mermaid from "mermaid";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
+mermaid.initialize({
+  startOnLoad: false,
+  securityLevel: "strict",
+  theme: "default",
+});
+
 function MermaidDiagram({ chart }) {
   const containerRef = useRef(null);
-  const diagramIdRef = useRef(
-    `mermaid-${Math.random().toString(36).substring(2, 10)}`
-  );
+  const [renderError, setRenderError] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
+
     async function renderDiagram() {
-      if (!containerRef.current || !chart?.trim()) return;
+      const source = chart?.trim();
+
+      if (!containerRef.current || !source) {
+        return;
+      }
+
+      setRenderError("");
+      containerRef.current.innerHTML = "";
 
       try {
-        mermaid.initialize({
-          startOnLoad: false,
-          securityLevel: "strict",
-          theme: "default",
-        });
+        await mermaid.parse(source);
 
-        const { svg } = await mermaid.render(
-          diagramIdRef.current,
-          chart.trim()
-        );
+        const diagramId = `mermaid-${crypto.randomUUID()}`;
+        const { svg } = await mermaid.render(diagramId, source);
 
-        containerRef.current.innerHTML = svg;
+        if (!cancelled && containerRef.current) {
+          containerRef.current.innerHTML = svg;
+        }
       } catch (error) {
         console.error("Mermaid render error:", error);
 
-        if (containerRef.current) {
-          containerRef.current.textContent =
-            "Unable to display this diagram.";
+        if (!cancelled) {
+          setRenderError(
+            error instanceof Error
+              ? error.message
+              : "The generated diagram contains invalid Mermaid syntax."
+          );
         }
       }
     }
 
     renderDiagram();
+
+    return () => {
+      cancelled = true;
+    };
   }, [chart]);
 
+  if (renderError) {
+    return (
+      <div className="mermaid-error">
+        <p>
+          <strong>Diagram could not be rendered.</strong>
+        </p>
+
+        <details>
+          <summary>Show diagram source</summary>
+          <pre>{chart}</pre>
+        </details>
+      </div>
+    );
+  }
+
   return <div ref={containerRef} className="mermaid-diagram" />;
+}
+
+function MarkdownContent({ content, emptyMessage = "No content available." }) {
+  if (!content) {
+    return <div>{emptyMessage}</div>;
+  }
+
+  return (
+    <ReactMarkdown
+      components={{
+        code({ className, children, ...props }) {
+          const languageMatch = /language-(\w+)/.exec(className || "");
+          const language = languageMatch?.[1]?.toLowerCase();
+
+          if (language === "mermaid") {
+            return (
+              <MermaidDiagram
+                chart={String(children).replace(/\n$/, "")}
+              />
+            );
+          }
+
+          return (
+            <code className={className} {...props}>
+              {children}
+            </code>
+          );
+        },
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
 }
 
 function App() {
@@ -64,6 +128,8 @@ function App() {
   const [notes, setNotes] = useState("");
   const [keyPoints, setKeyPoints] = useState("");
   const [summary, setSummary] = useState("");
+  const [pdfPages, setPdfPages] = useState([]);
+  const [selectedPdfPages, setSelectedPdfPages] = useState([]);
   const [subjectSummary, setSubjectSummary] = useState("");
   const [noteTitle, setNoteTitle] = useState("");
 
@@ -224,31 +290,64 @@ function App() {
         setLoading("");
       }
     } else if (file.name.endsWith(".pdf")) {
-      try {
-        setLoading("Extracting text from PDF...");
+  try {
+    setLoading("Extracting text and rendering PDF pages...");
 
-        const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
-        let pdfText = "";
+    let pdfText = "";
+    const renderedPages = [];
 
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const textContent = await page.getTextContent();
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
 
-          const pageText = textContent.items.map((item) => item.str).join(" ");
+      const pageText = textContent.items
+        .map((item) => item.str)
+        .join(" ");
 
-          pdfText += pageText + "\n\n";
-        }
+      pdfText += `Page ${i}\n${pageText}\n\n`;
 
-        setNotes(pdfText);
-        await extractKeyPoints(pdfText);
-      } catch (err) {
-        console.error(err);
-        setError("Failed to read PDF file.");
-      } finally {
-        setLoading("");
+      const viewport = page.getViewport({ scale: 1.2 });
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+
+      if (!context) {
+        throw new Error(`Unable to render PDF page ${i}`);
       }
+
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+
+      await page.render({
+        canvasContext: context,
+        viewport,
+      }).promise;
+
+      renderedPages.push({
+        pageNumber: i,
+        text: pageText,
+        imageUrl: canvas.toDataURL("image/jpeg", 0.75),
+      });
+    }
+
+    setPdfPages(renderedPages);
+    setSelectedPdfPages([]);
+    setNotes(pdfText);
+
+    await Promise.all([
+     extractKeyPoints(pdfText),
+     selectVisualPages(renderedPages),
+  ]);
+  } catch (err) {
+    console.error(err);
+    setPdfPages([]);
+    setSelectedPdfPages([]);
+    setError("Failed to read or render PDF file.");
+  } finally {
+    setLoading("");
+  }
     } else if (
       file.name.endsWith(".png") ||
       file.name.endsWith(".jpg") ||
@@ -273,6 +372,46 @@ function App() {
       setError("Please upload a .txt, .pdf, .png, .jpg, or .jpeg file only.");
     }
   };
+
+  async function selectVisualPages(pages) {
+  try {
+    const pageTextData = pages.map((page) => ({
+      pageNumber: page.pageNumber,
+      text: page.text,
+    }));
+
+    const response = await fetch(
+      "http://localhost:3000/api/select-visual-pages",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          pages: pageTextData,
+        }),
+      }
+    );
+
+    const data = await response.json();
+    console.log("AI selected pages:", data.selectedPages);
+
+    if (!response.ok) {
+      throw new Error(
+        data.error || "Failed to select lecture visuals"
+      );
+    }
+
+    setSelectedPdfPages(
+      Array.isArray(data.selectedPages)
+        ? data.selectedPages
+        : []
+    );
+  } catch (error) {
+    console.error("Visual page selection error:", error);
+    setSelectedPdfPages([]);
+  }
+}
 
   const generateFlashcards = async () => {
     try {
@@ -926,36 +1065,38 @@ function App() {
     <h2 style={styles.heading}>Summary Sheet</h2>
 
     <div style={styles.output}>
-      {summary ? (
-        <ReactMarkdown
-          components={{
-            code({ className, children, ...props }) {
-              const languageMatch = /language-(\w+)/.exec(
-                className || ""
-              );
+  <MarkdownContent
+    content={summary}
+    emptyMessage="No summary sheet generated yet."
+  />
 
-              if (languageMatch?.[1] === "mermaid") {
-                return (
-                  <MermaidDiagram
-                    chart={String(children).replace(/\n$/, "")}
-                  />
-                );
-              }
+  {selectedPdfPages.length > 0 && (
+    <>
+      <h3 style={{ marginTop: "32px" }}>Lecture Visuals</h3>
 
-              return (
-                <code className={className} {...props}>
-                  {children}
-                </code>
-              );
-            },
-          }}
-        >
-          {summary}
-        </ReactMarkdown>
-      ) : (
-        "No summary sheet generated yet."
-      )}
-    </div>
+      <div className="lecture-visuals">
+        {selectedPdfPages.map((pageNumber) => {
+          const page = pdfPages.find(
+            (p) => p.pageNumber === pageNumber
+          );
+
+          if (!page) return null;
+
+          return (
+            <div key={page.pageNumber} className="lecture-page">
+              <h4>Page {page.pageNumber}</h4>
+
+              <img
+                src={page.imageUrl}
+                alt={`Lecture page ${page.pageNumber}`}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </>
+  )}
+</div>
   </>
 )}
 
@@ -1000,8 +1141,11 @@ function App() {
             <h3>{subject} Cheat Sheet</h3>
 
             <div style={styles.output}>
-              {subjectSummary}
-            </div>
+  <MarkdownContent
+    content={subjectSummary}
+    emptyMessage="No subject summary generated yet."
+  />
+</div>
           </div>
         )}
 
@@ -1068,10 +1212,13 @@ function App() {
             )}
 
             {savedNoteTab === "summary" && (
-              <div style={styles.output}>
-                {selectedSavedNote.summary || "No summary saved."}
-              </div>
-            )}
+  <div style={styles.output}>
+    <MarkdownContent
+      content={selectedSavedNote.summary}
+      emptyMessage="No summary saved."
+    />
+  </div>
+)}
 
             {savedNoteTab === "flashcards" && (
               <div style={styles.output}>
