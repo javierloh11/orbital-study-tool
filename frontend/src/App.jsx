@@ -137,6 +137,9 @@ function App() {
   const [currentCard, setCurrentCard] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
 
+  const [savedCurrentCard, setSavedCurrentCard] = useState(0);
+  const [savedShowAnswer, setSavedShowAnswer] = useState(false);
+
   const [savedNotes, setSavedNotes] = useState([]);
   const [selectedSavedNote, setSelectedSavedNote] = useState(null);
   const [subject, setSubject] = useState("");
@@ -510,6 +513,16 @@ function App() {
 
       const token = await user.getIdToken();
 
+      const lectureVisuals = selectedPdfPages
+  .map((pageNumber) =>
+    pdfPages.find((page) => page.pageNumber === pageNumber)
+  )
+  .filter(Boolean)
+  .map((page) => ({
+    pageNumber: page.pageNumber,
+    imageUrl: page.imageUrl,
+  }));
+
       const response = await fetch("http://localhost:3000/save-note", {
         method: "POST",
         headers: {
@@ -522,9 +535,10 @@ function App() {
           originalText: notes,
           keyPoints,
           flashcards,
+          lectureVisuals,
           summary,
           layout: cheatSheetLayout,
-          sourceType: "text",
+          sourceType: pdfPages.length > 0 ? "pdf" : "text",
         }),
       });
 
@@ -1180,9 +1194,11 @@ function App() {
                   : styles.noteTab
               }
               onClick={() => {
-                setSelectedSavedNote(note);
-                setSavedNoteTab("original");
-              }}
+  setSelectedSavedNote(note);
+  setSavedNoteTab("original");
+  setSavedCurrentCard(0);
+  setSavedShowAnswer(false);
+}}
             >
               {note.title || `Note ${index + 1}`}
             </button>
@@ -1199,17 +1215,28 @@ function App() {
         </div>
 
         {subjectSummary && (
-          <div style={styles.savedNoteCard}>
-            <h3>{subject} Cheat Sheet</h3>
+  <section className="summary-sheet subject-summary-sheet">
+    <header className="summary-sheet-header">
+      <p className="summary-sheet-label">
+        Consolidated Revision Resource
+      </p>
 
-            <div style={styles.output}>
-  <MarkdownContent
-    content={subjectSummary}
-    emptyMessage="No subject summary generated yet."
-  />
-</div>
-          </div>
-        )}
+      <h2>{subject || "Subject"} Summary Sheet</h2>
+
+      <p>
+        A combined revision guide generated from all saved notes in this
+        subject.
+      </p>
+    </header>
+
+    <div className="summary-sheet-content">
+      <MarkdownContent
+        content={subjectSummary}
+        emptyMessage="No subject summary generated yet."
+      />
+    </div>
+  </section>
+)}
 
         {selectedSavedNote && (
           <div style={styles.savedNoteCard}>
@@ -1262,43 +1289,221 @@ function App() {
             </div>
 
             {savedNoteTab === "original" && (
-              <div style={styles.output}>
-                {selectedSavedNote.originalText || "No original text saved."}
-              </div>
-            )}
+  <section className="study-resource-sheet">
+    <header className="study-resource-header">
+      <p className="study-resource-label">Saved Source Material</p>
+
+      <h2>Original Notes</h2>
+
+      <p>
+        The original text used to generate this note’s study resources.
+      </p>
+    </header>
+
+    <div className="study-resource-content">
+      {selectedSavedNote.originalText ? (
+        <div className="original-note-content">
+          {selectedSavedNote.originalText}
+        </div>
+      ) : (
+        <p className="empty-resource-message">
+          No original text saved.
+        </p>
+      )}
+    </div>
+  </section>
+)}
 
             {savedNoteTab === "keypoints" && (
-              <div style={styles.output}>
-                {selectedSavedNote.keyPoints || "No key points saved."}
-              </div>
-            )}
+  <section className="study-resource-sheet">
+    <header className="study-resource-header">
+      <p className="study-resource-label">AI Revision Resource</p>
+      <h2>Key Points</h2>
+      <p>
+        The most important concepts extracted from this saved note.
+      </p>
+    </header>
+
+    <div className="study-resource-content">
+      <MarkdownContent
+        content={selectedSavedNote.keyPoints}
+        emptyMessage="No key points saved."
+      />
+    </div>
+  </section>
+)}
 
             {savedNoteTab === "summary" && (
-  <div style={styles.output}>
-    <MarkdownContent
-      content={selectedSavedNote.summary}
-      emptyMessage="No summary saved."
-    />
-  </div>
+  <section className="summary-sheet">
+    <header className="summary-sheet-header">
+      <p className="summary-sheet-label">AI Revision Resource</p>
+      <h2>Summary Sheet</h2>
+      <p>
+        A concise revision guide generated from this saved note.
+      </p>
+    </header>
+
+    <div className="summary-sheet-content">
+      <MarkdownContent
+        content={selectedSavedNote.summary}
+        emptyMessage="No summary saved."
+      />
+    </div>
+
+    {Array.isArray(selectedSavedNote.lectureVisuals) &&
+      selectedSavedNote.lectureVisuals.length > 0 && (
+        <section className="lecture-visuals-section">
+          <div className="lecture-visuals-header">
+            <div>
+              <p className="summary-sheet-label">
+                From your uploaded notes
+              </p>
+
+              <h3>Important Lecture Visuals</h3>
+            </div>
+
+            <span className="visual-count">
+              {selectedSavedNote.lectureVisuals.length} selected
+            </span>
+          </div>
+
+          <div className="lecture-visuals">
+            {selectedSavedNote.lectureVisuals.map((visual) => (
+              <figure
+                key={visual.pageNumber}
+                className="lecture-page"
+              >
+                <div className="lecture-page-heading">
+                  <span>Lecture visual</span>
+                  <strong>Page {visual.pageNumber}</strong>
+                </div>
+
+                <img
+                  src={visual.imageUrl}
+                  alt={`Important lecture visual from page ${visual.pageNumber}`}
+                />
+
+                <figcaption>
+                  Automatically selected as a useful revision visual.
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </section>
+      )}
+  </section>
 )}
 
             {savedNoteTab === "flashcards" && (
-              <div style={styles.output}>
-                {Array.isArray(selectedSavedNote.flashcards) &&
-                selectedSavedNote.flashcards.length > 0
-                  ? selectedSavedNote.flashcards.map((card, index) => (
-                    <div key={index} style={styles.savedFlashcard}>
-                      <p>
-                        <strong>Q:</strong> {card.question}
-                      </p>
-                      <p>
-                        <strong>A:</strong> {card.answer}
-                      </p>
-                    </div>
-                  ))
-                : "No flashcards saved."}
+  <section className="study-resource-sheet">
+    <header className="study-resource-header">
+      <p className="study-resource-label">Active Recall Resource</p>
+      <h2>Flashcards</h2>
+      <p>
+        Review one question at a time and reveal the answer when ready.
+      </p>
+    </header>
+
+    <div className="study-resource-content">
+      {!Array.isArray(selectedSavedNote.flashcards) ||
+      selectedSavedNote.flashcards.length === 0 ? (
+        <p className="empty-resource-message">
+          No flashcards saved.
+        </p>
+      ) : (
+        <div className="flashcard-study">
+          <div className="flashcard-progress-row">
+            <span>
+              Card {savedCurrentCard + 1} of{" "}
+              {selectedSavedNote.flashcards.length}
+            </span>
+
+            <div className="flashcard-progress-track">
+              <div
+                className="flashcard-progress-fill"
+                style={{
+                  width: `${
+                    ((savedCurrentCard + 1) /
+                      selectedSavedNote.flashcards.length) *
+                    100
+                  }%`,
+                }}
+              />
             </div>
-          )}
+          </div>
+
+          <article className="flashcard-study-card">
+            <p className="flashcard-section-label">Question</p>
+
+            <h3 className="flashcard-question">
+              {selectedSavedNote.flashcards[savedCurrentCard].question}
+            </h3>
+
+            {savedShowAnswer ? (
+              <div className="flashcard-answer-panel">
+                <p className="flashcard-section-label">Answer</p>
+
+                <p className="flashcard-answer-text">
+                  {
+                    selectedSavedNote.flashcards[savedCurrentCard]
+                      .answer
+                  }
+                </p>
+              </div>
+            ) : (
+              <p className="flashcard-hidden-hint">
+                Try answering before revealing the response.
+              </p>
+            )}
+          </article>
+
+          <div className="flashcard-study-controls">
+            <button
+              className="study-control-button secondary"
+              disabled={savedCurrentCard === 0}
+              onClick={() => {
+                setSavedCurrentCard((prev) =>
+                  Math.max(prev - 1, 0)
+                );
+                setSavedShowAnswer(false);
+              }}
+            >
+              Previous
+            </button>
+
+            <button
+              className="study-control-button primary"
+              onClick={() =>
+                setSavedShowAnswer((current) => !current)
+              }
+            >
+              {savedShowAnswer ? "Hide Answer" : "Show Answer"}
+            </button>
+
+            <button
+              className="study-control-button secondary"
+              disabled={
+                savedCurrentCard ===
+                selectedSavedNote.flashcards.length - 1
+              }
+              onClick={() => {
+                setSavedCurrentCard((prev) =>
+                  Math.min(
+                    prev + 1,
+                    selectedSavedNote.flashcards.length - 1
+                  )
+                );
+                setSavedShowAnswer(false);
+              }}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  </section>
+)}
         </div>
       )}
       </>

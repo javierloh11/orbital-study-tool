@@ -777,3 +777,23 @@
     flex: 1;
   }
 }
+
+.original-note-content {
+  white-space: pre-wrap;
+  line-height: 1.8;
+  color: #374151;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.subject-summary-sheet {
+  margin-bottom: 28px;
+}
+
+.subject-summary-sheet .summary-sheet-header h2 {
+  margin-bottom: 10px;
+}
+
+.subject-summary-sheet .summary-sheet-content {
+  padding-top: 28px;
+}

@@ -10,7 +10,11 @@ const app = express();
 const PORT = 3000;
 
 app.use(cors());
-app.use(express.json());
+app.use(
+  express.json({
+    limit: "10mb",
+  })
+);
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -390,6 +394,7 @@ app.post("/save-note", verifyUser, async (req, res) => {
   keyPoints,
   flashcards,
   summary,
+  lectureVisuals,
   layout,
   sourceType,
 } = req.body;
@@ -421,6 +426,7 @@ app.post("/save-note", verifyUser, async (req, res) => {
   keyPoints: keyPoints || "",
   flashcards: flashcards || [],
   summary: summary || "",
+  lectureVisuals: lectureVisuals || [],
   layout: layout || null,
   sourceType: sourceType || "text",
   createdAt: new Date(),
@@ -499,28 +505,95 @@ app.get("/subject-summary/:subject", verifyUser, async (req, res) => {
       .collection("notes")
       .get();
 
-    const allKeyPoints = snapshot.docs
-      .map((doc) => doc.data().keyPoints)
-      .filter(Boolean)
-      .join("\n\n");
+    const lectureNotes = snapshot.docs
+  .map((doc, index) => {
+    const note = doc.data();
 
-    if (!allKeyPoints.trim()) {
+    if (!note.keyPoints?.trim()) {
+      return null;
+    }
+
+    return `
+LECTURE ${index + 1}
+Title: ${note.title || `Lecture ${index + 1}`}
+
+Key Points:
+${note.keyPoints}
+`;
+  })
+  .filter(Boolean)
+  .join("\n\n---\n\n");
+
+    if (!lectureNotes.trim()) {
       return res.status(400).json({ error: "No key points found" });
     }
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4.1-mini",
-      messages: [
-        {
-          role: "user",
-          content: `
-Create a concise study summary sheet using these key points:
+  model: "gpt-4.1-mini",
+  messages: [
+    {
+      role: "user",
+      content: `
+You are an experienced university professor creating a consolidated subject revision sheet from multiple lectures.
 
-${allKeyPoints}
+Your goal is NOT to combine every bullet point.
+
+Your goal is to identify, merge, and organise only the most important examinable concepts across all lectures.
+
+Before writing:
+
+1. Read every lecture separately.
+2. Identify repeated concepts across lectures.
+3. Merge overlapping ideas.
+4. Remove duplicated, trivial, or administrative information.
+5. Preserve important distinctions between topics.
+6. Prioritise concepts most likely to appear in an exam.
+
+Requirements:
+
+- Maximum 900 words.
+- Use Markdown.
+- Do not include an overall title.
+- Do not use Markdown tables.
+- Do not generate Mermaid diagrams.
+- Use short sections and concise bullet points.
+- Maximum 6 bullets per section.
+- Avoid long paragraphs.
+- Do not repeat the same concept in different sections.
+- Do not include every lecture example.
+- Include code only when essential.
+- Code examples must be fewer than 4 lines.
+- Do not invent information.
+
+Use this structure:
+
+## Subject Overview
+- Summarise the subject in no more than 3 bullets.
+
+## Core Concepts
+- Include the most important concepts across all lectures.
+- Begin each bullet with a bold concept name.
+
+## Key Relationships
+- Explain how important concepts connect or differ.
+- Include comparisons such as inheritance versus interfaces only when relevant.
+
+## Essential Rules and Syntax
+- Include only rules, syntax, formulas, or code patterns worth memorising.
+
+## Common Mistakes
+- Include likely misconceptions or exam mistakes.
+
+## Final Revision Checklist
+- Include 5 to 8 questions students should be able to answer before the exam.
+
+Multiple lecture materials:
+
+${lectureNotes}
 `,
-        },
-      ],
-    });
+    },
+  ],
+});
 
     res.json({
       summary: completion.choices[0].message.content,
