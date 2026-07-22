@@ -120,6 +120,146 @@ function MarkdownContent({ content, emptyMessage = "No content available." }) {
   );
 }
 
+function escapeHtml(value = "") {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function markdownSectionToHtml(section = "") {
+  const lines = section
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (!lines.length) {
+    return "<p>No content available.</p>";
+  }
+
+  return lines
+    .map((line) => {
+      if (line.startsWith("### ")) {
+        return `<h3>${escapeHtml(line.slice(4))}</h3>`;
+      }
+
+      if (line.startsWith("## ")) {
+        return `<h2>${escapeHtml(line.slice(3))}</h2>`;
+      }
+
+      if (line.startsWith("# ")) {
+        return `<h1>${escapeHtml(line.slice(2))}</h1>`;
+      }
+
+      if (/^[-*]\s+/.test(line)) {
+        return `<p>• ${escapeHtml(line.replace(/^[-*]\s+/, ""))}</p>`;
+      }
+
+      if (/^\d+\.\s+/.test(line)) {
+        return `<p>${escapeHtml(line)}</p>`;
+      }
+
+      return `<p>${escapeHtml(line)}</p>`;
+    })
+    .join("");
+}
+
+function splitMarkdownSections(markdown = "") {
+  const source = markdown.trim();
+
+  if (!source) {
+    return [];
+  }
+
+  const lines = source.split("\n");
+  const sections = [];
+  let currentSection = [];
+
+  const pushCurrentSection = () => {
+    const content = currentSection.join("\n").trim();
+
+    if (content) {
+      sections.push(content);
+    }
+
+    currentSection = [];
+  };
+
+  for (const line of lines) {
+    const isHeading = /^#{1,6}\s+/.test(line);
+    const isBullet = /^[-*]\s+/.test(line);
+    const isNumberedItem = /^\d+\.\s+/.test(line);
+
+    if (
+      currentSection.length > 0 &&
+      (isHeading || isBullet || isNumberedItem)
+    ) {
+      pushCurrentSection();
+    }
+
+    currentSection.push(line);
+  }
+
+  pushCurrentSection();
+
+  return sections;
+}
+
+function ResourceSectionPicker({
+  content,
+  emptyMessage,
+  onAdd,
+  onAddAll,
+}) {
+  const sections = splitMarkdownSections(content);
+
+  if (!sections.length) {
+    return (
+      <p className="empty-resource-message">
+        {emptyMessage}
+      </p>
+    );
+  }
+
+  return (
+    <>
+      <div className="builder-picker-header">
+        <p>
+          Select individual sections or add the entire resource.
+        </p>
+
+        <button
+          type="button"
+          className="builder-add-all-button"
+          onClick={onAddAll}
+        >
+          Add all sections
+        </button>
+      </div>
+
+      <div className="builder-resource-grid">
+        {sections.map((section, index) => (
+          <article
+            key={`${index}-${section.slice(0, 30)}`}
+            className="builder-resource-item"
+          >
+            <div className="builder-resource-preview">
+              <MarkdownContent content={section} />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onAdd(section, index)}
+            >
+              Add to canvas
+            </button>
+          </article>
+        ))}
+      </div>
+    </>
+  );
+}
+
 function App() {
   const [user, setUser] = useState(null);
   const [email, setEmail] = useState("");
@@ -154,6 +294,7 @@ function App() {
 
   const [cheatSheetLayout, setCheatSheetLayout] = useState(null);
   const editorRef = useRef(null);
+  const [editorSource, setEditorSource] = useState("keypoints");
 
   async function fetchSubjects(currentUser = user) {
     try {
@@ -731,27 +872,74 @@ function App() {
     doc.save(`${note.title || "stitch-note"}.pdf`);
   };
 
-  const loadEditorContent = (source) => {
-    let text = "";
-    if (source === "notes") text = notes;
-    else if (source === "keypoints") text = keyPoints;
-    else if (source === "summary") text = summary;
-    else if (source === "subjectSummary") text = subjectSummary;
+const openCheatSheetBuilder = () => {
+  setActiveTab("editor");
+};
 
-    const html =
-      "<p>" +
-      (text || "")
-        .split("\n")
-        .filter((l) => l.trim().length)
-        .map((l) => l.replace(/</g, "&lt;").replace(/>/g, "&gt;"))
-        .join("</p><p>") +
-      "</p>";
+const addResourceSectionToEditor = (section, index) => {
+  setActiveTab("editor");
 
-    setActiveTab("editor");
-    setTimeout(() => {
-      editorRef.current?.addTextBlock(html || "<p>(empty)</p>");
-    }, 0); 
-  };
+  const html = markdownSectionToHtml(section);
+
+  setTimeout(() => {
+    editorRef.current?.addTextBlock(html, {
+      x: 40 + (index % 3) * 30,
+      y: 40 + (index % 5) * 30,
+    });
+  }, 0);
+};
+
+const addFlashcardToEditor = (card, index) => {
+  setActiveTab("editor");
+
+  setTimeout(() => {
+    editorRef.current?.addFlashcardBlock(card, {
+      x: 50 + (index % 3) * 30,
+      y: 50 + (index % 5) * 30,
+    });
+  }, 0);
+};
+
+const addVisualToEditor = (visual, index) => {
+  setActiveTab("editor");
+
+  setTimeout(() => {
+    editorRef.current?.addImageBlock(
+      {
+        imageUrl: visual.imageUrl,
+      },
+      {
+        x: 60 + (index % 3) * 30,
+        y: 60 + (index % 5) * 30,
+      }
+    );
+  }, 0);
+};
+
+const addAllSectionsToEditor = (content) => {
+  const sections = splitMarkdownSections(content);
+
+  if (!sections.length) {
+    alert("There is no content available to add.");
+    return;
+  }
+
+  setActiveTab("editor");
+
+  setTimeout(() => {
+    sections.forEach((section, index) => {
+      editorRef.current?.addTextBlock(
+        markdownSectionToHtml(section),
+        {
+          x: 30 + (index % 2) * 370,
+          y: 30 + Math.floor(index / 2) * 190,
+          width: 340,
+          height: 160,
+        }
+      );
+    });
+  }, 0);
+};
 
   if (!user) {
     return (
@@ -967,8 +1155,12 @@ function App() {
             </button>
 
             <button
-              style={activeTab === "editor" ? styles.activeTab : styles.tabButton}
-              onClick={() => loadEditorContent("notes")}
+              style={
+                activeTab === "editor" 
+                  ? styles.activeTab 
+                  : styles.tabButton
+                }
+                onClick={openCheatSheetBuilder}
             >
               Note Editor
             </button>
@@ -982,21 +1174,200 @@ function App() {
           </div>
 
           {activeTab === "editor" && (
-            <>
-              <h2 style={styles.heading}>Edit Note for Export</h2>
-              
-              <p style={styles.helperText}>
-                Format your note before exporting. This does not affect AI generation
-              </p>
-              
-              <CheatSheetEditor
-                ref={editorRef}
-                initialPages={cheatSheetLayout}
-                onChange={setCheatSheetLayout}
-                exportFileName={noteTitle || "stitch-cheat-sheet"}
-              />
-            </>
-          )}
+            <section className="cheat-sheet-builder">
+              <header className="builder-header">
+                <p className="study-resource-label">
+                  Custom Revision Workspace
+                </p>
+
+                <h2>Cheat Sheet Builder</h2>
+
+                <p>
+                  Add selected concepts, flashcards and visuals, then rearrange
+                  them on the canvas.
+                </p>
+              </header>
+
+              <div className="builder-source-panel">
+                <div className="builder-source-tabs">
+                  <button
+                    type="button"
+                    className={
+                      editorSource === "keypoints"
+                        ? "builder-source-tab active"
+                        : "builder-source-tab"
+                    }
+                    onClick={() => setEditorSource("keypoints")}
+                  >
+                    Key Points
+                  </button>
+
+                  <button
+                    type="button"
+                    className={
+                      editorSource === "summary"
+                        ? "builder-source-tab active"
+                        : "builder-source-tab"
+                    }
+                    onClick={() => setEditorSource("summary")}
+                  >
+                    Summary
+                  </button>
+
+                  <button
+                    type="button"
+                    className={
+                      editorSource === "flashcards"
+                        ? "builder-source-tab active"
+                        : "builder-source-tab"
+                    }
+                    onClick={() => setEditorSource("flashcards")}
+                  >
+                    Flashcards
+                  </button>
+
+                  <button
+                    type="button"
+                    className={
+                      editorSource === "visuals"
+                        ? "builder-source-tab active"
+                        : "builder-source-tab"
+                    }
+                    onClick={() => setEditorSource("visuals")}
+                  >
+                    Visuals
+                  </button>
+
+                  <button
+                    type="button"
+                    className={
+                      editorSource === "original"
+                        ? "builder-source-tab active"
+                        : "builder-source-tab"
+                    }
+                    onClick={() => setEditorSource("original")}
+                  >
+                    Original Notes
+                  </button>
+                </div>
+
+                {editorSource === "keypoints" && (
+                  <ResourceSectionPicker
+                    content={keyPoints}
+                    emptyMessage="Generate key points before adding them."
+                    onAdd={addResourceSectionToEditor}
+                    onAddAll={() => addAllSectionsToEditor(keyPoints)}
+                  />
+                )}
+
+                {editorSource === "summary" && (
+                  <ResourceSectionPicker
+                    content={summary}
+                    emptyMessage="Generate a summary before adding it."
+                    onAdd={addResourceSectionToEditor}
+                    onAddAll={() => addAllSectionsToEditor(summary)}
+                 />
+                )}
+
+                  {editorSource === "original" && (
+                    <ResourceSectionPicker
+                      content={notes}
+                      emptyMessage="No original notes are available."
+                      onAdd={addResourceSectionToEditor}
+                      onAddAll={() => addAllSectionsToEditor(notes)}
+                    />
+                  )}
+
+                  {editorSource === "flashcards" && (
+                    <div className="builder-resource-grid">
+                      {flashcards.length === 0 ? (
+                        <p className="empty-resource-message">
+                          Generate flashcards before adding them.
+                        </p>
+                     ) : (
+                        flashcards.map((card, index) => (
+                          <article
+                            key={`${card.question}-${index}`}
+                            className="builder-resource-item"
+                          >
+                            <p className="builder-resource-label">
+                              Flashcard {index + 1}
+                            </p>
+
+                            <h4>{card.question}</h4>
+                            <p>{card.answer}</p>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                addFlashcardToEditor(card, index)
+                              }
+                            >
+                              Add to canvas
+                            </button>
+                          </article>
+                        ))
+                      )}
+                    </div>
+                  )}
+
+                  {editorSource === "visuals" && (
+                    <div className="builder-resource-grid">
+                      {selectedPdfPages.length === 0 ? (
+                        <p className="empty-resource-message">
+                          No lecture visuals are currently available.
+                        </p>
+                  ) : (
+                    selectedPdfPages.map((pageNumber, index) => {
+                      const page = pdfPages.find(
+                        (item) => item.pageNumber === pageNumber
+                      );
+
+                      if (!page) {
+                        return null;
+                      }
+
+                      return (
+                        <article
+                          key={page.pageNumber}
+                          className="builder-resource-item"
+                        >
+                        <p className="builder-resource-label">
+                          Page {page.pageNumber}
+                        </p>
+
+                        <img
+                          className="builder-visual-preview"
+                          src={page.imageUrl}
+                          alt={`Lecture page ${page.pageNumber}`}
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            addVisualToEditor(page, index)
+                          }
+                        >
+                          Add to canvas
+                        </button>
+                      </article>
+                    );
+                  })
+                )}
+              </div>
+            )}
+         </div>
+
+         <CheatSheetEditor
+            ref={editorRef}
+            initialPages={cheatSheetLayout}
+            onChange={setCheatSheetLayout}
+            exportFileName={
+              noteTitle || "stitch-cheat-sheet"
+            }
+          />
+        </section>
+      )}
 
           {activeTab === "keypoints" && (
   <section className="study-resource-sheet">

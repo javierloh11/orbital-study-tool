@@ -508,13 +508,66 @@ const CheatSheetEditor = forwardRef(function CheatSheetEditor(
 
   /* ---------------- imperative API for parent (App.jsx) ---------------- */
 
-  useImperativeHandle(ref, () => ({
-    addTextBlock: (html, opts = {}) => addBlock("text", { content: html, ...opts }),
-    exportAsPNG,
-    exportAsPDF,
-    getPages: () => pages,
-    loadPages: (p) => setPages(p && p.length ? p : [blankPage()]),
-  }));
+useImperativeHandle(ref, () => ({
+  addTextBlock: (html, opts = {}) =>
+    addBlock("text", {
+      content: html,
+      width: 340,
+      height: 180,
+      ...opts,
+    }),
+
+  addHeadingBlock: (text, opts = {}) =>
+    addBlock("text", {
+      content: `<h2>${text}</h2>`,
+      width: 420,
+      height: 100,
+      ...opts,
+    }),
+
+  addFlashcardBlock: ({ question, answer }, opts = {}) =>
+    addBlock("text", {
+      content: `
+        <div class="editor-flashcard-content">
+          <p><strong>Question</strong></p>
+          <p>${question}</p>
+          <hr />
+          <p><strong>Answer</strong></p>
+          <p>${answer}</p>
+        </div>
+      `,
+      width: 360,
+      height: 240,
+      style: {
+        backgroundColor: "#eff6ff",
+      },
+      ...opts,
+    }),
+
+  addImageBlock: ({ imageUrl }, opts = {}) =>
+    addBlock("image", {
+      content: imageUrl,
+      width: 380,
+      height: 280,
+      ...opts,
+    }),
+
+  exportAsPNG,
+  exportAsPDF,
+  getPages: () => pages,
+
+  loadPages: (nextPages) => {
+    setPages(
+      Array.isArray(nextPages) && nextPages.length
+        ? nextPages
+        : [blankPage()]
+    );
+
+    setPageIndex(0);
+    setSelectedId(null);
+    setEditingId(null);
+  },
+}));
 
   /* ---------------- image upload ---------------- */
 
@@ -622,21 +675,39 @@ const CheatSheetEditor = forwardRef(function CheatSheetEditor(
                 .map((b) => (
                   <Rnd
                     key={b.id}
-                    size={{ width: b.width, height: b.height }}
-                    position={{ x: b.x, y: b.y }}
+                    size={{
+                      width: b.width,
+                      height: b.height,
+                    }}
+                    position={{
+                      x: b.x,
+                      y: b.y,
+                    }}
                     bounds="parent"
+                    dragHandleClassName="cs-block-drag-handle"
                     dragGrid={snap ? [GRID_SIZE, GRID_SIZE] : [1, 1]}
                     resizeGrid={snap ? [GRID_SIZE, GRID_SIZE] : [1, 1]}
-                    disableDragging={b.locked || editingId === b.id}
+                    disableDragging={b.locked}
                     enableResizing={!b.locked && editingId !== b.id}
-                    style={{ zIndex: b.zIndex }}
-                    onDragStart={() => setSelectedId(b.id)}
-                    onDragStop={(e, d) => updateBlock(b.id, { x: d.x, y: d.y })}
-                    onResizeStop={(e, dir, ref2, delta, pos) =>
+                    style={{
+                      zIndex: b.zIndex,
+                    }}
+                    onDragStart={() => {
+                     setSelectedId(b.id);
+                     setEditingId(null);
+                    }}
+                    onDragStop={(event, data) =>
                       updateBlock(b.id, {
-                        width: parseInt(ref2.style.width, 10),
-                        height: parseInt(ref2.style.height, 10),
-                        ...pos,
+                        x: data.x,
+                        y: data.y,
+                      })
+                    }
+                    onResizeStop={(event, direction, element, delta, position) =>
+                      updateBlock(b.id, {
+                        width: Number.parseInt(element.style.width, 10),
+                        height: Number.parseInt(element.style.height, 10),
+                        x: position.x,
+                        y: position.y,
                       })
                     }
                   >
@@ -644,20 +715,94 @@ const CheatSheetEditor = forwardRef(function CheatSheetEditor(
                       className={`cs-block cs-block-${b.type} ${
                         selectedId === b.id ? "cs-block-selected" : ""
                       }`}
-                      onMouseDown={() => setSelectedId(b.id)}
-                      onDoubleClick={() => {
-                        if (b.type === "text" || b.type === "sticky") setEditingId(b.id);
+                      onMouseDown={(event) => {
+                        event.stopPropagation();
+                        setSelectedId(b.id);
+                      }}
+                      onDoubleClick={(event) => {
+                        event.stopPropagation();
+
+                        if (b.type === "text" || b.type === "sticky") {
+                          setEditingId(b.id);
+                        }
                       }}
                       style={b.style}
                     >
+                      {selectedId === b.id && (
+                        <div
+                          className="cs-block-controls"
+                          onMouseDown={(event) => event.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            className="cs-block-drag-handle"
+                            title="Drag block"
+                            aria-label="Drag block"
+                          >
+                            ⋮⋮
+                          </button>
+
+                          {(b.type === "text" || b.type === "sticky") && (
+                             <button
+                                type="button"
+                                title="Edit text"
+                                onClick={() => setEditingId(b.id)}
+                              >
+                                Edit
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              title="Duplicate block"
+                              onClick={() => duplicateBlock(b.id)}
+                            >
+                              Duplicate
+                            </button>
+
+                            <button
+                              type="button"
+                              title={b.locked ? "Unlock block" : "Lock block"}
+                              onClick={() =>
+                                updateBlock(b.id, {
+                                  locked: !b.locked,
+                                })
+                              }
+                            >
+                              {b.locked ? "Unlock" : "Lock"}
+                            </button>
+
+                            <button
+                              type="button"
+                              className="cs-block-delete"
+                              title="Delete block"
+                              onClick={() => deleteBlock(b.id)}
+                            >
+                              Delete
+                            </button>
+                         </div>
+                      )}
                       {(b.type === "text" || b.type === "sticky") && (
                         <div
-                          ref={(el) => (editableRefs.current[b.id] = el)}
+                          ref={(element) => {
+                            editableRefs.current[b.id] = element;
+                          }}
                           className="cs-editable"
                           contentEditable={editingId === b.id}
                           suppressContentEditableWarning
-                          onBlur={() => editingId === b.id && finishEditing(b.id)}
-                          dangerouslySetInnerHTML={{ __html: b.content }}
+                          onMouseDown={(event) => {
+                            if (editingId === b.id) {
+                              event.stopPropagation();
+                            }
+                          }}
+                          onBlur={() => {
+                            if (editingId === b.id) {
+                              finishEditing(b.id);
+                            }
+                          }}
+                          dangerouslySetInnerHTML={{
+                            __html: b.content,
+                          }}
                         />
                       )}
 
