@@ -715,13 +715,8 @@ useImperativeHandle(ref, () => ({
                       className={`cs-block cs-block-${b.type} ${
                         selectedId === b.id ? "cs-block-selected" : ""
                       }`}
-                      onMouseDown={(event) => {
-                        event.stopPropagation();
-                        setSelectedId(b.id);
-                      }}
-                      onDoubleClick={(event) => {
-                        event.stopPropagation();
-
+                      onMouseDown={() => setSelectedId(b.id)}
+                      onDoubleClick={() => {
                         if (b.type === "text" || b.type === "sticky") {
                           setEditingId(b.id);
                         }
@@ -743,66 +738,53 @@ useImperativeHandle(ref, () => ({
                           </button>
 
                           {(b.type === "text" || b.type === "sticky") && (
-                             <button
-                                type="button"
-                                title="Edit text"
-                                onClick={() => setEditingId(b.id)}
-                              >
-                                Edit
-                              </button>
-                            )}
-
                             <button
                               type="button"
-                              title="Duplicate block"
-                              onClick={() => duplicateBlock(b.id)}
+                              title="Edit text"
+                              onClick={() => setEditingId(b.id)}
                             >
-                              Duplicate
+                              Edit
                             </button>
+                          )}
 
-                            <button
-                              type="button"
-                              title={b.locked ? "Unlock block" : "Lock block"}
-                              onClick={() =>
-                                updateBlock(b.id, {
-                                  locked: !b.locked,
-                                })
-                              }
-                            >
-                              {b.locked ? "Unlock" : "Lock"}
-                            </button>
+                          <button
+                            type="button"
+                            title="Duplicate block"
+                            onClick={() => duplicateBlock(b.id)}
+                          >
+                            Duplicate
+                          </button>
 
-                            <button
-                              type="button"
-                              className="cs-block-delete"
-                              title="Delete block"
-                              onClick={() => deleteBlock(b.id)}
-                            >
-                              Delete
-                            </button>
-                         </div>
+                          <button
+                            type="button"
+                            title={b.locked ? "Unlock block" : "Lock block"}
+                            onClick={() =>
+                              updateBlock(b.id, {
+                                locked: !b.locked,
+                              })
+                            }
+                          >
+                            {b.locked ? "Unlock" : "Lock"}
+                          </button>
+
+                          <button
+                            type="button"
+                            className="cs-block-delete"
+                            title="Delete block"
+                            onClick={() => deleteBlock(b.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       )}
                       {(b.type === "text" || b.type === "sticky") && (
                         <div
-                          ref={(element) => {
-                            editableRefs.current[b.id] = element;
-                          }}
+                          ref={(el) => (editableRefs.current[b.id] = el)}
                           className="cs-editable"
                           contentEditable={editingId === b.id}
                           suppressContentEditableWarning
-                          onMouseDown={(event) => {
-                            if (editingId === b.id) {
-                              event.stopPropagation();
-                            }
-                          }}
-                          onBlur={() => {
-                            if (editingId === b.id) {
-                              finishEditing(b.id);
-                            }
-                          }}
-                          dangerouslySetInnerHTML={{
-                            __html: b.content,
-                          }}
+                          onBlur={() => editingId === b.id && finishEditing(b.id)}
+                          dangerouslySetInnerHTML={{ __html: b.content }}
                         />
                       )}
 

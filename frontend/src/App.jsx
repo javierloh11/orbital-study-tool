@@ -10,7 +10,6 @@ import {
 } from "firebase/auth";
 import jsPDF from "jspdf";
 import CheatSheetEditor from "./CheatSheetEditor";
-import html2canvas from "html2canvas";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import mermaid from "mermaid";
@@ -282,6 +281,10 @@ function App() {
 
   const [savedNotes, setSavedNotes] = useState([]);
   const [selectedSavedNote, setSelectedSavedNote] = useState(null);
+  const [editingSavedNoteId, setEditingSavedNoteId] = useState(null);
+  const [savedNoteDraft, setSavedNoteDraft] = useState(null);
+  const [savedNoteSearch, setSavedNoteSearch] = useState("");
+  const [savedNoteSort, setSavedNoteSort] = useState("newest");
   const [subject, setSubject] = useState("");
   const [subjects, setSubjects] = useState([]);
   const [newSubject, setNewSubject] = useState("");
@@ -295,6 +298,33 @@ function App() {
   const [cheatSheetLayout, setCheatSheetLayout] = useState(null);
   const editorRef = useRef(null);
   const [editorSource, setEditorSource] = useState("keypoints");
+
+  const filteredSavedNotes = savedNotes
+    .filter((note) =>
+      (note.title || "Untitled Note")
+        .toLowerCase()
+        .includes(savedNoteSearch.trim().toLowerCase())
+    )
+    .sort((a, b) => {
+      if (savedNoteSort === "title") {
+        return (a.title || "Untitled Note").localeCompare(
+          b.title || "Untitled Note"
+        );
+      }
+
+      const getMillis = (value) => {
+        if (!value) return 0;
+        if (typeof value.toMillis === "function") return value.toMillis();
+        if (typeof value._seconds === "number") return value._seconds * 1000;
+        if (typeof value.seconds === "number") return value.seconds * 1000;
+        const parsed = new Date(value).getTime();
+        return Number.isNaN(parsed) ? 0 : parsed;
+      };
+
+      const aTime = getMillis(a.createdAt);
+      const bTime = getMillis(b.createdAt);
+      return savedNoteSort === "oldest" ? aTime - bTime : bTime - aTime;
+    });
 
   async function fetchSubjects(currentUser = user) {
     try {
@@ -653,34 +683,42 @@ function App() {
       }
 
       const token = await user.getIdToken();
+      const currentLayout = editorRef.current?.getPages?.() ?? cheatSheetLayout;
 
       const lectureVisuals = selectedPdfPages
-  .map((pageNumber) =>
-    pdfPages.find((page) => page.pageNumber === pageNumber)
-  )
-  .filter(Boolean)
-  .map((page) => ({
-    pageNumber: page.pageNumber,
-    imageUrl: page.imageUrl,
-  }));
+        .map((pageNumber) =>
+          pdfPages.find((page) => page.pageNumber === pageNumber)
+        )
+        .filter(Boolean)
+        .map((page) => ({
+          pageNumber: page.pageNumber,
+          imageUrl: page.imageUrl,
+        }));
 
-      const response = await fetch("http://localhost:3000/save-note", {
-        method: "POST",
+      const payload = {
+        subject,
+        title: noteTitle.trim() || "Untitled Note",
+        originalText: notes,
+        keyPoints,
+        flashcards,
+        lectureVisuals,
+        summary,
+        layout: currentLayout,
+        sourceType: pdfPages.length > 0 ? "pdf" : "text",
+      };
+
+      const isUpdating = Boolean(editingSavedNoteId);
+      const url = isUpdating
+        ? `http://localhost:3000/saved-notes/${subject}/${editingSavedNoteId}`
+        : "http://localhost:3000/save-note";
+
+      const response = await fetch(url, {
+        method: isUpdating ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          subject,
-          title: noteTitle.trim() || "Untitled Note",
-          originalText: notes,
-          keyPoints,
-          flashcards,
-          lectureVisuals,
-          summary,
-          layout: cheatSheetLayout,
-          sourceType: pdfPages.length > 0 ? "pdf" : "text",
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -689,13 +727,30 @@ function App() {
         throw new Error(data.error || "Failed to save note");
       }
 
-      console.log("Saved:", data);
-      alert("Note saved successfully!");
-      setNoteTitle("");
+      alert(isUpdating ? "Note updated successfully!" : "Note saved successfully!");
+      setCheatSheetLayout(currentLayout);
+
+      if (isUpdating) {
+        const updatedNote = {
+          ...(selectedSavedNote || {}),
+          ...payload,
+          id: editingSavedNoteId,
+        };
+
+        setSavedNotes((current) =>
+          current.map((note) =>
+            note.id === editingSavedNoteId ? updatedNote : note
+          )
+        );
+        setSelectedSavedNote(updatedNote);
+      } else {
+        setEditingSavedNoteId(data.id);
+      }
+
       await fetchSubjects(user);
     } catch (error) {
       console.error("Error saving note:", error);
-      alert("Failed to save note");
+      alert(error.message || "Failed to save note");
     }
   }
 
@@ -730,6 +785,8 @@ function App() {
 
       if (Array.isArray(data)) {
   setSavedNotes(data);
+  setEditingSavedNoteId(null);
+  setSavedNoteDraft(null);
 
   if (data.length > 0) {
     setSelectedSavedNote(data[0]);
@@ -737,6 +794,7 @@ function App() {
     setSelectedSavedNote(null);
   }
 
+  await fetchSavedSubjectSummary();
   setActiveTab("saved");
 } else {
   setSavedNotes([]);
@@ -751,6 +809,27 @@ function App() {
     }
   }
   
+  async function fetchSavedSubjectSummary() {
+    if (!user || !subject) return;
+
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(
+        `http://localhost:3000/subject-summary/${subject}/saved`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      const data = await response.json();
+      if (response.ok) {
+        setSubjectSummary(data.summary || "");
+      }
+    } catch (error) {
+      console.error("Failed to load saved subject summary:", error);
+    }
+  }
+
   async function generateSubjectSummary() {
     try {
       if (!subject) {
@@ -758,6 +837,7 @@ function App() {
         return;
       }
 
+      setLoading("Generating subject summary...");
       const token = await user.getIdToken();
 
       const response = await fetch(
@@ -770,11 +850,166 @@ function App() {
       );
 
       const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to generate subject summary");
+      }
 
-      setSubjectSummary(data.summary);
+      setSubjectSummary(data.summary || "");
     } catch (error) {
       console.error(error);
-      alert("Failed to generate subject summary.");
+      alert(error.message || "Failed to generate subject summary.");
+    } finally {
+      setLoading("");
+    }
+  }
+
+  async function saveSubjectSummary() {
+    if (!subjectSummary.trim()) {
+      alert("Generate or enter a subject summary first.");
+      return;
+    }
+
+    try {
+      setLoading("Saving subject summary...");
+      const token = await user.getIdToken();
+      const response = await fetch(
+        `http://localhost:3000/subject-summary/${subject}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ summary: subjectSummary }),
+        }
+      );
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to save subject summary");
+      }
+
+      alert("Subject summary saved successfully!");
+    } catch (error) {
+      console.error(error);
+      alert(error.message || "Failed to save subject summary.");
+    } finally {
+      setLoading("");
+    }
+  }
+
+  function exportSubjectSummaryAsPDF() {
+    if (!subjectSummary.trim()) {
+      alert("There is no subject summary to export.");
+      return;
+    }
+
+    const doc = new jsPDF();
+    const margin = 15;
+    const maxWidth = 180;
+    const pageHeight = doc.internal.pageSize.height;
+    let y = 20;
+
+    doc.setFontSize(18);
+    doc.text(`${subject || "Subject"} Summary Sheet`, margin, y);
+    y += 12;
+    doc.setFontSize(11);
+
+    const plainText = subjectSummary
+      .replace(/```[\s\S]*?```/g, "")
+      .replace(/^#{1,6}\s+/gm, "")
+      .replace(/\*\*/g, "")
+      .replace(/^[-*]\s+/gm, "• ");
+
+    const lines = doc.splitTextToSize(plainText, maxWidth);
+    lines.forEach((line) => {
+      if (y > pageHeight - 20) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.text(line, margin, y);
+      y += 7;
+    });
+
+    doc.save(`${subject || "subject"}-summary.pdf`);
+  }
+
+  function openSavedNoteInBuilder(note) {
+    if (!note) return;
+
+    setSelectedSavedNote(note);
+    setEditingSavedNoteId(note.id);
+    setNoteTitle(note.title || "Untitled Note");
+    setNotes(note.originalText || "");
+    setKeyPoints(note.keyPoints || "");
+    setSummary(note.summary || "");
+    setFlashcards(Array.isArray(note.flashcards) ? note.flashcards : []);
+
+    const visuals = Array.isArray(note.lectureVisuals)
+      ? note.lectureVisuals
+      : [];
+    setPdfPages(
+      visuals.map((visual) => ({
+        pageNumber: visual.pageNumber,
+        text: "",
+        imageUrl: visual.imageUrl,
+      }))
+    );
+    setSelectedPdfPages(visuals.map((visual) => visual.pageNumber));
+    setCheatSheetLayout(note.layout || null);
+    setActiveTab("editor");
+
+    setTimeout(() => {
+      editorRef.current?.loadPages(note.layout || null);
+    }, 0);
+  }
+
+  function beginEditingSavedNote(note) {
+    setSavedNoteDraft({
+      title: note.title || "Untitled Note",
+      originalText: note.originalText || "",
+      keyPoints: note.keyPoints || "",
+      summary: note.summary || "",
+    });
+  }
+
+  async function updateSavedNoteContent() {
+    if (!selectedSavedNote || !savedNoteDraft) return;
+
+    try {
+      setLoading("Updating saved note...");
+      const token = await user.getIdToken();
+      const response = await fetch(
+        `http://localhost:3000/saved-notes/${subject}/${selectedSavedNote.id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(savedNoteDraft),
+        }
+      );
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to update saved note");
+      }
+
+      const updatedNote = { ...selectedSavedNote, ...savedNoteDraft };
+      setSavedNotes((current) =>
+        current.map((note) =>
+          note.id === updatedNote.id ? updatedNote : note
+        )
+      );
+      setSelectedSavedNote(updatedNote);
+      setSavedNoteDraft(null);
+      alert("Saved note updated successfully!");
+    } catch (error) {
+      console.error(error);
+      alert(error.message || "Failed to update saved note.");
+    } finally {
+      setLoading("");
     }
   }
 
@@ -798,6 +1033,11 @@ function App() {
     );
 
     setSavedNotes(updatedNotes);
+
+    if (editingSavedNoteId === noteId) {
+      setEditingSavedNoteId(null);
+      setCheatSheetLayout(null);
+    }
 
     if (updatedNotes.length > 0) {
       setSelectedSavedNote(updatedNotes[0]);
@@ -1162,7 +1402,7 @@ const addAllSectionsToEditor = (content) => {
                 }
                 onClick={openCheatSheetBuilder}
             >
-              Note Editor
+              Cheat Sheet Builder
             </button>
 
             <button
@@ -1555,8 +1795,32 @@ const addAllSectionsToEditor = (content) => {
       <div style={styles.output}>No saved notes loaded yet.</div>
     ) : (
       <>
+        <div className="saved-notes-toolbar">
+          <input
+            type="search"
+            placeholder="Search saved notes..."
+            value={savedNoteSearch}
+            onChange={(event) => setSavedNoteSearch(event.target.value)}
+          />
+
+          <select
+            value={savedNoteSort}
+            onChange={(event) => setSavedNoteSort(event.target.value)}
+          >
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="title">Title A–Z</option>
+          </select>
+        </div>
+
+        {filteredSavedNotes.length === 0 && (
+          <p className="empty-resource-message">
+            No saved notes match your search.
+          </p>
+        )}
+
         <div style={styles.savedNotesTabs}>
-          {savedNotes.map((note, index) => (
+          {filteredSavedNotes.map((note, index) => (
             <button
               key={note.id}
               style={
@@ -1569,6 +1833,7 @@ const addAllSectionsToEditor = (content) => {
   setSavedNoteTab("original");
   setSavedCurrentCard(0);
   setSavedShowAnswer(false);
+  setSavedNoteDraft(null);
 }}
             >
               {note.title || `Note ${index + 1}`}
@@ -1576,12 +1841,29 @@ const addAllSectionsToEditor = (content) => {
           ))}
         </div>
 
-        <div style={{ marginBottom: "20px" }}>
+        <div className="subject-summary-actions">
           <button
             style={styles.button}
             onClick={generateSubjectSummary}
+            disabled={loading}
           >
-            Generate Subject Summary Sheet
+            Generate Subject Summary
+          </button>
+
+          <button
+            style={styles.secondaryButton}
+            onClick={saveSubjectSummary}
+            disabled={loading || !subjectSummary.trim()}
+          >
+            Save Subject Summary
+          </button>
+
+          <button
+            style={styles.secondaryButton}
+            onClick={exportSubjectSummaryAsPDF}
+            disabled={!subjectSummary.trim()}
+          >
+            Export Subject Summary
           </button>
         </div>
 
@@ -1605,6 +1887,15 @@ const addAllSectionsToEditor = (content) => {
         content={subjectSummary}
         emptyMessage="No subject summary generated yet."
       />
+
+      <label className="subject-summary-editor-label">
+        Edit subject summary
+        <textarea
+          className="subject-summary-editor"
+          value={subjectSummary}
+          onChange={(event) => setSubjectSummary(event.target.value)}
+        />
+      </label>
     </div>
   </section>
 )}
@@ -1614,6 +1905,20 @@ const addAllSectionsToEditor = (content) => {
             <div style={styles.savedNoteHeader}>
               <h3>{selectedSavedNote.title || "Untitled Note"}</h3>
               <div style={{ display: "flex", gap: "10px" }}>
+                <button
+                  style={styles.button}
+                  onClick={() => openSavedNoteInBuilder(selectedSavedNote)}
+                >
+                  Open in Builder
+                </button>
+
+                <button
+                  style={styles.secondaryButton}
+                  onClick={() => beginEditingSavedNote(selectedSavedNote)}
+                >
+                  Edit Content
+                </button>
+
                 <button
                   style={styles.secondaryButton}
                   onClick={() => exportNoteAsPDF(selectedSavedNote)}
@@ -1628,6 +1933,81 @@ const addAllSectionsToEditor = (content) => {
               </button>
             </div>
           </div>
+
+            {savedNoteDraft && (
+              <section className="saved-note-edit-panel">
+                <h3>Edit saved note</h3>
+
+                <label>
+                  Title
+                  <input
+                    value={savedNoteDraft.title}
+                    onChange={(event) =>
+                      setSavedNoteDraft((current) => ({
+                        ...current,
+                        title: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+
+                <label>
+                  Original notes
+                  <textarea
+                    value={savedNoteDraft.originalText}
+                    onChange={(event) =>
+                      setSavedNoteDraft((current) => ({
+                        ...current,
+                        originalText: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+
+                <label>
+                  Key points
+                  <textarea
+                    value={savedNoteDraft.keyPoints}
+                    onChange={(event) =>
+                      setSavedNoteDraft((current) => ({
+                        ...current,
+                        keyPoints: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+
+                <label>
+                  Summary
+                  <textarea
+                    value={savedNoteDraft.summary}
+                    onChange={(event) =>
+                      setSavedNoteDraft((current) => ({
+                        ...current,
+                        summary: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+
+                <div className="saved-note-edit-actions">
+                  <button
+                    style={styles.button}
+                    onClick={updateSavedNoteContent}
+                    disabled={loading}
+                  >
+                    Save Changes
+                  </button>
+
+                  <button
+                    style={styles.secondaryButton}
+                    onClick={() => setSavedNoteDraft(null)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </section>
+            )}
 
             <div style={styles.tabRow}>
               <button
