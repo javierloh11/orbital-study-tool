@@ -16,6 +16,9 @@ import mermaid from "mermaid";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
+const API_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:3000";
+
 mermaid.initialize({
   startOnLoad: false,
   securityLevel: "strict",
@@ -332,7 +335,7 @@ function App() {
 
       const token = await currentUser.getIdToken();
 
-      const response = await fetch("http://localhost:3000/subjects", {
+      const response = await fetch(`${API_URL}/subjects`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -418,7 +421,7 @@ function App() {
       setLoading("Processing notes...");
       setError("");
 
-      const response = await fetch("http://localhost:3000/api/process-notes", {
+      const response = await fetch(`${API_URL}/api/process-notes`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -555,7 +558,7 @@ function App() {
     }));
 
     const response = await fetch(
-      "http://localhost:3000/api/select-visual-pages",
+      `${API_URL}/api/select-visual-pages`,
       {
         method: "POST",
         headers: {
@@ -592,7 +595,7 @@ function App() {
       setLoading("Generating flashcards...");
       setError("");
 
-      const response = await fetch("http://localhost:3000/api/flashcards", {
+      const response = await fetch(`${API_URL}/api/flashcards`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -628,7 +631,7 @@ function App() {
       setLoading("Generating summary sheet...");
       setError("");
 
-      const response = await fetch("http://localhost:3000/api/summary", {
+      const response = await fetch(`${API_URL}/api/summary`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -654,7 +657,7 @@ function App() {
       const subjectName = newSubject.trim();
       const token = await user.getIdToken();
 
-      await fetch("http://localhost:3000/subjects", {
+      await fetch(`${API_URL}/subjects`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -709,8 +712,8 @@ function App() {
 
       const isUpdating = Boolean(editingSavedNoteId);
       const url = isUpdating
-        ? `http://localhost:3000/saved-notes/${subject}/${editingSavedNoteId}`
-        : "http://localhost:3000/save-note";
+        ? `${API_URL}/saved-notes/${subject}/${editingSavedNoteId}`
+        : `${API_URL}/save-note`;
 
       const response = await fetch(url, {
         method: isUpdating ? "PUT" : "POST",
@@ -772,7 +775,7 @@ function App() {
       const token = await user.getIdToken();
 
       const response = await fetch(
-        `http://localhost:3000/saved-notes/${subject}`,
+        `${API_URL}/saved-notes/${subject}`,
         {
           method: "GET",
           headers: {
@@ -815,7 +818,7 @@ function App() {
     try {
       const token = await user.getIdToken();
       const response = await fetch(
-        `http://localhost:3000/subject-summary/${subject}/saved`,
+        `${API_URL}/subject-summary/${subject}/saved`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -841,7 +844,7 @@ function App() {
       const token = await user.getIdToken();
 
       const response = await fetch(
-        `http://localhost:3000/subject-summary/${subject}`,
+        `${API_URL}/subject-summary/${subject}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -873,7 +876,7 @@ function App() {
       setLoading("Saving subject summary...");
       const token = await user.getIdToken();
       const response = await fetch(
-        `http://localhost:3000/subject-summary/${subject}`,
+        `${API_URL}/subject-summary/${subject}`,
         {
           method: "PUT",
           headers: {
@@ -980,7 +983,7 @@ function App() {
       setLoading("Updating saved note...");
       const token = await user.getIdToken();
       const response = await fetch(
-        `http://localhost:3000/saved-notes/${subject}/${selectedSavedNote.id}`,
+        `${API_URL}/saved-notes/${subject}/${selectedSavedNote.id}`,
         {
           method: "PUT",
           headers: {
@@ -1019,7 +1022,7 @@ function App() {
     const token = await user.getIdToken();
 
     await fetch(
-      `http://localhost:3000/saved-notes/${subject}/${noteId}`,
+      `${API_URL}/saved-notes/${subject}/${noteId}`,
       {
         method: "DELETE",
         headers: {

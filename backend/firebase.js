@@ -1,18 +1,27 @@
-const { initializeApp, cert, getApps } = require("firebase-admin/app");
-const { getFirestore } = require("firebase-admin/firestore");
-const { getAuth } = require("firebase-admin/auth");
+const admin = require("firebase-admin");
 
-const serviceAccount = require("./firebase-key.json");
+if (!admin.apps.length) {
+  if (process.env.FIREBASE_PROJECT_ID) {
+    // Production (Render)
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+      }),
+    });
+  } else {
+    // Local development
+    const serviceAccount = require("./firebase-key.json");
 
-const app =
-  getApps().length === 0
-    ? initializeApp({
-        credential: cert(serviceAccount),
-      })
-    : getApps()[0];
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+  }
+}
 
-const db = getFirestore(app);
-const auth = getAuth(app);
+const db = admin.firestore();
+const auth = admin.auth();
 
 module.exports = {
   db,
