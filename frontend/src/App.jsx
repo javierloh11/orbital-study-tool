@@ -301,6 +301,7 @@ function App() {
   const [cheatSheetLayout, setCheatSheetLayout] = useState(null);
   const editorRef = useRef(null);
   const [editorSource, setEditorSource] = useState("keypoints");
+  const [layoutDirty, setLayoutDirty] = useState(false);
 
   const filteredSavedNotes = savedNotes
     .filter((note) =>
@@ -418,7 +419,7 @@ function App() {
 
   const extractKeyPoints = async (inputNotes = notes) => {
     try {
-      setLoading("Processing notes...");
+      setLoading("Extracting key concpts...");
       setError("");
 
       const response = await fetch(`${API_URL}/api/process-notes`, {
@@ -628,7 +629,7 @@ function App() {
     }
 
     try {
-      setLoading("Generating summary sheet...");
+      setLoading("Building summary sheet...");
       setError("");
 
       const response = await fetch(`${API_URL}/api/summary`, {
@@ -679,6 +680,7 @@ function App() {
   }
 
   async function saveNote() {
+    setLoading("Saving note...");
     try {
       if (!subject.trim()) {
         alert("Please select or create a subject first.");
@@ -732,6 +734,7 @@ function App() {
 
       alert(isUpdating ? "Note updated successfully!" : "Note saved successfully!");
       setCheatSheetLayout(currentLayout);
+      setLayoutDirty(false);
 
       if (isUpdating) {
         const updatedNote = {
@@ -755,6 +758,7 @@ function App() {
       console.error("Error saving note:", error);
       alert(error.message || "Failed to save note");
     }
+    setLoading("");
   }
 
   async function fetchSavedNote() {
@@ -867,6 +871,7 @@ function App() {
   }
 
   async function saveSubjectSummary() {
+    setLoading("Saving subject summary...");
     if (!subjectSummary.trim()) {
       alert("Generate or enter a subject summary first.");
       return;
@@ -1311,7 +1316,7 @@ const addAllSectionsToEditor = (content) => {
               <button
                 style={styles.button}
                 onClick={() => extractKeyPoints()}
-                disabled={loading}
+                disabled={loading !== ""}
               >
                 Key Points
               </button>
@@ -1319,7 +1324,7 @@ const addAllSectionsToEditor = (content) => {
               <button
                 style={styles.button}
                 onClick={generateFlashcards}
-                disabled={loading}
+                disabled={loading !== ""}
               >
                 Flashcards
               </button>
@@ -1327,7 +1332,7 @@ const addAllSectionsToEditor = (content) => {
               <button
                 style={styles.button}
                 onClick={generateSummary}
-                disabled={loading}
+                disabled={loading !== ""}
               >
                 Summary Sheet
               </button>
@@ -1339,15 +1344,15 @@ const addAllSectionsToEditor = (content) => {
               <button
                 style={styles.secondaryButton}
                 onClick={saveNote}
-                disabled={loading}
+                disabled={loading !== ""}
               >
-                Save Notes
+                {editingSavedNoteId ? "Update Note" : "Save Note"}
               </button>
 
               <button
                 style={styles.secondaryButton}
                 onClick={fetchSavedNote}
-                disabled={loading}
+                disabled={loading !== ""}
               >
                 View Saved Notes
               </button>
@@ -1359,7 +1364,7 @@ const addAllSectionsToEditor = (content) => {
               <button
                 style={styles.logoutButton}
                 onClick={logoutUser}
-                disabled={loading}
+                disabled={loading !== ""}
               >
                 Logout
               </button>
@@ -1430,6 +1435,23 @@ const addAllSectionsToEditor = (content) => {
                   them on the canvas.
                 </p>
               </header>
+
+              <div
+                style={{
+                  marginBottom: "16px",
+                  fontWeight: "600",
+                }}
+              >
+                {layoutDirty ? (
+                  <span style={{ color: "#d97706" }}>
+                    ● Unsaved Changes
+                  </span>
+                ) : (
+                  <span style={{ color: "#16a34a" }}>
+                     ✓ Saved
+                  </span>
+                )}
+              </div> 
 
               <div className="builder-source-panel">
                 <div className="builder-source-tabs">
@@ -1604,7 +1626,10 @@ const addAllSectionsToEditor = (content) => {
          <CheatSheetEditor
             ref={editorRef}
             initialPages={cheatSheetLayout}
-            onChange={setCheatSheetLayout}
+            onChange={(layout) => {
+              setCheatSheetLayout(layout);
+              setLayoutDirty(true);
+            }}
             exportFileName={
               noteTitle || "stitch-cheat-sheet"
             }
@@ -1930,7 +1955,15 @@ const addAllSectionsToEditor = (content) => {
                 </button>
               <button
                 style={styles.deleteButton}
-                onClick={() => deleteSavedNote(selectedSavedNote.id)}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      "Are you sure you want to permanently delete this note?"
+                    )
+                  ) {
+                    deleteSavedNote(selectedSavedNote.id);
+                  }
+                }}
               >
                 Delete Note
               </button>
