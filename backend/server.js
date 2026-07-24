@@ -468,6 +468,64 @@ app.get("/saved-notes/:subject", verifyUser, async (req, res) => {
   }
 });
 
+
+app.put("/saved-notes/:subject/:noteId", verifyUser, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const { subject, noteId } = req.params;
+    const {
+      title,
+      originalText,
+      keyPoints,
+      flashcards,
+      summary,
+      lectureVisuals,
+      layout,
+      sourceType,
+    } = req.body;
+
+    const noteRef = db
+      .collection("users")
+      .doc(uid)
+      .collection("subjects")
+      .doc(subject)
+      .collection("notes")
+      .doc(noteId);
+
+    const noteSnapshot = await noteRef.get();
+
+    if (!noteSnapshot.exists) {
+      return res.status(404).json({ error: "Saved note not found" });
+    }
+
+    const updates = {
+      updatedAt: new Date(),
+    };
+
+    if (title !== undefined) updates.title = title.trim() || "Untitled Note";
+    if (originalText !== undefined) updates.originalText = originalText;
+    if (keyPoints !== undefined) updates.keyPoints = keyPoints;
+    if (flashcards !== undefined) updates.flashcards = Array.isArray(flashcards) ? flashcards : [];
+    if (summary !== undefined) updates.summary = summary;
+    if (lectureVisuals !== undefined) {
+      updates.lectureVisuals = Array.isArray(lectureVisuals) ? lectureVisuals : [];
+    }
+    if (layout !== undefined) updates.layout = layout;
+    if (sourceType !== undefined) updates.sourceType = sourceType;
+
+    await noteRef.set(updates, { merge: true });
+
+    res.json({
+      success: true,
+      id: noteId,
+      ...updates,
+    });
+  } catch (error) {
+    console.error("Error updating note:", error);
+    res.status(500).json({ error: "Failed to update note" });
+  }
+});
+
 app.delete("/saved-notes/:subject/:noteId", verifyUser, async (req, res) => {
   try {
     const uid = req.user.uid;
@@ -489,6 +547,65 @@ app.delete("/saved-notes/:subject/:noteId", verifyUser, async (req, res) => {
   } catch (error) {
     console.error("Error deleting note:", error);
     res.status(500).json({ error: "Failed to delete note" });
+  }
+});
+
+
+app.get("/subject-summary/:subject/saved", verifyUser, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const subject = req.params.subject;
+
+    const subjectSnapshot = await db
+      .collection("users")
+      .doc(uid)
+      .collection("subjects")
+      .doc(subject)
+      .get();
+
+    if (!subjectSnapshot.exists) {
+      return res.json({ summary: "" });
+    }
+
+    res.json({
+      summary: subjectSnapshot.data().subjectSummary || "",
+      updatedAt: subjectSnapshot.data().subjectSummaryUpdatedAt || null,
+    });
+  } catch (error) {
+    console.error("Error retrieving subject summary:", error);
+    res.status(500).json({ error: "Failed to retrieve subject summary" });
+  }
+});
+
+app.put("/subject-summary/:subject", verifyUser, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const subject = req.params.subject;
+    const { summary } = req.body;
+
+    if (typeof summary !== "string" || !summary.trim()) {
+      return res.status(400).json({ error: "No subject summary provided" });
+    }
+
+    await db
+      .collection("users")
+      .doc(uid)
+      .collection("subjects")
+      .doc(subject)
+      .set(
+        {
+          name: subject,
+          subjectSummary: summary,
+          subjectSummaryUpdatedAt: new Date(),
+          updatedAt: new Date(),
+        },
+        { merge: true }
+      );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error saving subject summary:", error);
+    res.status(500).json({ error: "Failed to save subject summary" });
   }
 });
 
