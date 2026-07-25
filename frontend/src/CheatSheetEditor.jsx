@@ -596,6 +596,25 @@ useImperativeHandle(ref, () => ({
     updateBlock(id, { data: b.data.map((row) => [...row, ""]) });
   };
 
+  useEffect(() => {
+  if (!editingId) return;
+
+  const editableElement = editableRefs.current[editingId];
+
+  if (!editableElement) return;
+
+  editableElement.focus();
+
+  const selection = window.getSelection();
+  const range = document.createRange();
+
+  range.selectNodeContents(editableElement);
+  range.collapse(false);
+
+  selection.removeAllRanges();
+  selection.addRange(range);
+}, [editingId]);
+  
   const selectedBlock = blocks.find((b) => b.id === selectedId);
 
   /* ================================================================ */
@@ -665,9 +684,16 @@ useImperativeHandle(ref, () => ({
               ref={canvasRef}
               className="cs-canvas"
               style={{ width: A4_WIDTH, height: A4_HEIGHT }}
-              onMouseDown={(e) => {
-                if (e.target === e.currentTarget) setSelectedId(null);
-              }}
+              onMouseDown={(event) => {
+  if (event.target !== event.currentTarget) return;
+
+  if (editingId) {
+    finishEditing(editingId);
+  }
+
+  setSelectedId(null);
+  setEditingId(null);
+}}
             >
               {blocks
                 .slice()
@@ -687,7 +713,7 @@ useImperativeHandle(ref, () => ({
                     dragHandleClassName="cs-block-drag-handle"
                     dragGrid={snap ? [GRID_SIZE, GRID_SIZE] : [1, 1]}
                     resizeGrid={snap ? [GRID_SIZE, GRID_SIZE] : [1, 1]}
-                    disableDragging={b.locked}
+                    disableDragging={b.locked || editingId === b.id}
                     enableResizing={!b.locked && editingId !== b.id}
                     style={{
                       zIndex: b.zIndex,
@@ -715,19 +741,39 @@ useImperativeHandle(ref, () => ({
                       className={`cs-block cs-block-${b.type} ${
                         selectedId === b.id ? "cs-block-selected" : ""
                       }`}
-                      onMouseDown={() => setSelectedId(b.id)}
-                      onDoubleClick={() => {
-                        if (b.type === "text" || b.type === "sticky") {
-                          setEditingId(b.id);
-                        }
-                      }}
+                      onMouseDown={(event) => {
+  setSelectedId(b.id);
+
+  if (event.target.closest(".cs-block-drag-handle")) {
+    return;
+  }
+
+  event.stopPropagation();
+}}
+onDoubleClick={(event) => {
+  event.stopPropagation();
+
+  if (
+    !b.locked &&
+    (b.type === "text" || b.type === "sticky")
+  ) {
+    setSelectedId(b.id);
+    setEditingId(b.id);
+  }
+}}
                       style={b.style}
                     >
                       {selectedId === b.id && (
                         <div
-                          className="cs-block-controls"
-                          onMouseDown={(event) => event.stopPropagation()}
-                        >
+  className="cs-block-controls"
+  onMouseDown={(event) => {
+    if (event.target.closest(".cs-block-drag-handle")) {
+      return;
+    }
+
+    event.stopPropagation();
+  }}
+>
                           <button
                             type="button"
                             className="cs-block-drag-handle"
@@ -779,13 +825,30 @@ useImperativeHandle(ref, () => ({
                       )}
                       {(b.type === "text" || b.type === "sticky") && (
                         <div
-                          ref={(el) => (editableRefs.current[b.id] = el)}
-                          className="cs-editable"
-                          contentEditable={editingId === b.id}
-                          suppressContentEditableWarning
-                          onBlur={() => editingId === b.id && finishEditing(b.id)}
-                          dangerouslySetInnerHTML={{ __html: b.content }}
-                        />
+  ref={(el) => {
+    editableRefs.current[b.id] = el;
+  }}
+  className={`cs-editable ${
+    editingId === b.id ? "cs-editable-active" : ""
+  }`}
+  contentEditable={editingId === b.id}
+  suppressContentEditableWarning
+  onMouseDown={(event) => {
+    if (editingId === b.id) {
+      event.stopPropagation();
+    }
+  }}
+  onBlur={(event) => {
+    if (editingId !== b.id) return;
+
+    updateBlock(b.id, {
+      content: event.currentTarget.innerHTML,
+    });
+
+    setEditingId(null);
+  }}
+  dangerouslySetInnerHTML={{ __html: b.content }}
+/>
                       )}
 
                       {b.type === "shape" && <ShapeSvg shapeType={b.shapeType} style={b.style} />}

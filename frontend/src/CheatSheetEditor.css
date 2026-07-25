@@ -309,3 +309,85 @@
 .cs-page-tab span:hover {
   color: #dc2626;
 }
+
+.cs-toolbar button,
+.cs-toolbar input,
+.cs-toolbar select,
+.cs-text-toolbar button,
+.cs-text-toolbar input,
+.cs-text-toolbar select,
+.cs-inspector button,
+.cs-inspector input,
+.cs-inspector select,
+.cs-page-tab button {
+  color: #111827;
+  background-color: #ffffff;
+  -webkit-text-fill-color: #111827;
+  opacity: 1;
+}
+
+.cs-inspector input:not([type="color"]),
+.cs-inspector select {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 12px;
+}
+
+.cs-inspector input[type="color"] {
+  width: 54px;
+  height: 30px;
+  padding: 2px;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.cs-block-controls {
+  position: absolute;
+  top: -42px;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
+  z-index: 1000;
+}
+
+.cs-block-controls button {
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #111827;
+  padding: 4px 7px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.cs-block-controls button:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+.cs-block-controls .cs-block-delete:hover {
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+.cs-block-drag-handle {
+  cursor: grab;
+  user-select: none;
+}
+
+.cs-block-drag-handle:active {
+  cursor: grabbing;
+}

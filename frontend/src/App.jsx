@@ -207,6 +207,42 @@ function splitMarkdownSections(markdown = "") {
   return sections;
 }
 
+function extractMermaidChart(section = "") {
+  const match = section.match(
+    /```[ \t]*mermaid[ \t]*\r?\n([\s\S]*?)```/i
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    chart: match[1].trim(),
+    remainingText: section.replace(match[0], "").trim(),
+  };
+}
+
+async function mermaidChartToDataUrl(chart) {
+  const source = chart?.trim();
+
+  if (!source) {
+    throw new Error("Mermaid chart is empty.");
+  }
+
+  await mermaid.parse(source);
+
+  const diagramId = `builder-mermaid-${crypto.randomUUID()}`;
+  const { svg } = await mermaid.render(diagramId, source);
+
+  const blob = new Blob([svg], {
+    type: "image/svg+xml;charset=utf-8",
+  });
+
+  return URL.createObjectURL(blob);
+}
+
+
+
 function ResourceSectionPicker({
   content,
   emptyMessage,
@@ -1124,17 +1160,62 @@ const openCheatSheetBuilder = () => {
   setActiveTab("editor");
 };
 
-const addResourceSectionToEditor = (section, index) => {
+const addResourceSectionToEditor = async (section, index) => {
   setActiveTab("editor");
 
-  const html = markdownSectionToHtml(section);
+  const mermaidContent = extractMermaidChart(section);
 
-  setTimeout(() => {
-    editorRef.current?.addTextBlock(html, {
-      x: 40 + (index % 3) * 30,
-      y: 40 + (index % 5) * 30,
-    });
-  }, 0);
+  try {
+    if (mermaidContent) {
+      const imageUrl = await mermaidChartToDataUrl(
+        mermaidContent.chart
+      );
+
+      if (mermaidContent.remainingText) {
+        editorRef.current?.addTextBlock(
+          markdownSectionToHtml(
+            mermaidContent.remainingText
+          ),
+          {
+            x: 40 + (index % 3) * 30,
+            y: 40 + (index % 5) * 30,
+            width: 340,
+            height: 100,
+          }
+        );
+      }
+
+      editorRef.current?.addImageBlock(
+        { imageUrl },
+        {
+          x: 60 + (index % 3) * 30,
+          y: mermaidContent.remainingText
+            ? 160 + (index % 5) * 30
+            : 40 + (index % 5) * 30,
+          width: 480,
+          height: 320,
+        }
+      );
+
+      return;
+    }
+
+    editorRef.current?.addTextBlock(
+      markdownSectionToHtml(section),
+      {
+        x: 40 + (index % 3) * 30,
+        y: 40 + (index % 5) * 30,
+      }
+    );
+  } catch (error) {
+  console.error("Failed to add Mermaid diagram:", error);
+
+  alert(
+    `The Mermaid diagram could not be added: ${
+      error instanceof Error ? error.message : "Unknown error"
+    }`
+  );
+}
 };
 
 const addFlashcardToEditor = (card, index) => {
@@ -1422,36 +1503,31 @@ const addAllSectionsToEditor = (content) => {
           </div>
 
           {activeTab === "editor" && (
-            <section className="cheat-sheet-builder">
-              <header className="builder-header">
-                <p className="study-resource-label">
-                  Custom Revision Workspace
-                </p>
+            <section className="cheat-sheet-builder study-resource-sheet">
+  <header className="study-resource-header builder-header">
+    <p className="study-resource-label">
+      Custom Revision Workspace
+    </p>
 
-                <h2>Cheat Sheet Builder</h2>
+    <h2>Cheat Sheet Builder</h2>
 
-                <p>
-                  Add selected concepts, flashcards and visuals, then rearrange
-                  them on the canvas.
-                </p>
-              </header>
+    <p>
+      Create a personalised revision sheet by adding and arranging
+      concepts, flashcards and lecture visuals.
+    </p>
+  </header>
 
-              <div
-                style={{
-                  marginBottom: "16px",
-                  fontWeight: "600",
-                }}
-              >
-                {layoutDirty ? (
-                  <span style={{ color: "#d97706" }}>
-                    ● Unsaved Changes
-                  </span>
-                ) : (
-                  <span style={{ color: "#16a34a" }}>
-                     ✓ Saved
-                  </span>
-                )}
-              </div> 
+  <div className="builder-status-row">
+    <span
+      className={
+        layoutDirty
+          ? "builder-status-badge unsaved"
+          : "builder-status-badge saved"
+      }
+    >
+      {layoutDirty ? "● Unsaved changes" : "✓ Saved"}
+    </span>
+  </div>
 
               <div className="builder-source-panel">
                 <div className="builder-source-tabs">
@@ -1594,9 +1670,9 @@ const addAllSectionsToEditor = (content) => {
 
                       return (
                         <article
-                          key={page.pageNumber}
-                          className="builder-resource-item"
-                        >
+  key={page.pageNumber}
+  className="builder-resource-item builder-visual-item"
+>
                         <p className="builder-resource-label">
                           Page {page.pageNumber}
                         </p>
