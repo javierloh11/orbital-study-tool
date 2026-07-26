@@ -234,11 +234,49 @@ async function mermaidChartToDataUrl(chart) {
   const diagramId = `builder-mermaid-${crypto.randomUUID()}`;
   const { svg } = await mermaid.render(diagramId, source);
 
-  const blob = new Blob([svg], {
-    type: "image/svg+xml;charset=utf-8",
-  });
+  const svgDataUrl =
+    `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 
-  return URL.createObjectURL(blob);
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+
+      const scale = 3;
+
+      const width = image.naturalWidth || 1200;
+      const height = image.naturalHeight || 800;
+
+      canvas.width = width * scale;
+      canvas.height = height * scale;
+
+      const context = canvas.getContext("2d");
+
+      if (!context) {
+        reject(new Error("Could not create Mermaid canvas."));
+        return;
+      }
+
+      context.scale(scale, scale);
+
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, width, height);
+
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = "high";
+
+      context.drawImage(image, 0, 0, width, height);
+
+      resolve(canvas.toDataURL("image/png"));
+    };
+
+    image.onerror = () => {
+      reject(new Error("Failed to convert Mermaid diagram."));
+    };
+
+    image.src = svgDataUrl;
+  });
 }
 
 

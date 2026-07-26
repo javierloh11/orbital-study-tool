@@ -474,37 +474,97 @@ const CheatSheetEditor = forwardRef(function CheatSheetEditor(
 
   /* ---------------- export ---------------- */
 
+  const waitForImages = async (element) => {
+  const images = Array.from(element.querySelectorAll("img"));
+
+  await Promise.all(
+    images.map((img) => {
+      if (img.complete) return Promise.resolve();
+
+      return new Promise((resolve) => {
+        img.onload = resolve;
+        img.onerror = resolve;
+      });
+    })
+  );
+};
+  
   const exportAsPNG = async () => {
-    if (!canvasRef.current) return;
+  if (!canvasRef.current) return;
+
+  try {
     setSelectedId(null);
-    await new Promise((r) => setTimeout(r, 50));
-    const canvas = await html2canvas(canvasRef.current, { scale: 2, backgroundColor: "#ffffff" });
+    setEditingId(null);
+
+    await new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(resolve);
+      });
+    });
+
+    const canvas = await html2canvas(canvasRef.current, {
+      scale: 3,
+      backgroundColor: "#ffffff",
+      useCORS: true,
+      allowTaint: false,
+    });
+
     const link = document.createElement("a");
     link.href = canvas.toDataURL("image/png");
     link.download = `${exportFileName}.png`;
+
+    document.body.appendChild(link);
     link.click();
-  };
+    document.body.removeChild(link);
+  } catch (error) {
+    console.error("PNG export failed:", error);
+    alert(`PNG export failed: ${error.message}`);
+  }
+};
 
   const exportAsPDF = async () => {
+  if (!canvasRef.current) return;
+
+  try {
     setSelectedId(null);
-    await new Promise((r) => setTimeout(r, 50));
-    const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [A4_WIDTH, A4_HEIGHT] });
-    const originalIndex = pageIndex;
+    setEditingId(null);
 
-    for (let i = 0; i < pages.length; i++) {
-      setPageIndex(i);
-      // eslint-disable-next-line no-await-in-loop
-      await new Promise((r) => setTimeout(r, 60));
-      // eslint-disable-next-line no-await-in-loop
-      const canvas = await html2canvas(canvasRef.current, { scale: 2, backgroundColor: "#ffffff" });
-      const img = canvas.toDataURL("image/png");
-      if (i > 0) pdf.addPage([A4_WIDTH, A4_HEIGHT]);
-      pdf.addImage(img, "PNG", 0, 0, A4_WIDTH, A4_HEIGHT);
-    }
+    await new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(resolve);
+      });
+    });
 
-    setPageIndex(originalIndex);
+    const canvas = await html2canvas(canvasRef.current, {
+      scale: 3,
+      backgroundColor: "#ffffff",
+      useCORS: true,
+      allowTaint: false,
+    });
+
+    const imageData = canvas.toDataURL("image/png");
+
+    const pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "px",
+      format: [A4_WIDTH, A4_HEIGHT],
+    });
+
+    pdf.addImage(
+      imageData,
+      "PNG",
+      0,
+      0,
+      A4_WIDTH,
+      A4_HEIGHT
+    );
+
     pdf.save(`${exportFileName}.pdf`);
-  };
+  } catch (error) {
+    console.error("PDF export failed:", error);
+    alert(`PDF export failed: ${error.message}`);
+  }
+};
 
   /* ---------------- imperative API for parent (App.jsx) ---------------- */
 
