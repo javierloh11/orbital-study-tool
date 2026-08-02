@@ -10,22 +10,36 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const allowedOrigins = [
   "http://localhost:5173",
+  "https://orbitalstudytool.vercel.app",
   process.env.FRONTEND_URL,
-].filter(Boolean);
+]
+  .filter(Boolean)
+  .map((url) => url.trim().replace(/\/$/, ""));
+
+console.log("Allowed CORS origins:", allowedOrigins);
 
 
-app.use(
-  cors({
-    origin(origin, callback) {
-      // Allow requests without an origin, such as Postman or server checks
-      if (!origin || allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
+const corsOptions = {
+  origin(origin, callback) {
+    // Allow Postman, Render health checks and other non-browser requests
+    if (!origin) {
+      return callback(null, true);
+    }
 
-      return callback(new Error("Not allowed by CORS"));
-    },
-  })
-);
+    const normalizedOrigin = origin.trim().replace(/\/$/, "");
+
+    if (allowedOrigins.includes(normalizedOrigin)) {
+      return callback(null, true);
+    }
+
+    console.error("Blocked CORS origin:", origin);
+    return callback(new Error(`Origin not allowed by CORS: ${origin}`));
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
+
+app.use(cors(corsOptions));
 
 app.use(
   express.json({
