@@ -1,449 +1,541 @@
+/* ==========================================================================
+   Cheat Sheet Builder — document-design workspace
+   Class names match the existing CheatSheetEditor.jsx logic.
+   The page canvas itself stays white in both themes (it represents paper
+   and is what gets exported), while the surrounding workspace is themed.
+   ========================================================================== */
+
 .cs-root {
   display: flex;
   flex-direction: column;
-  border: 1px solid #d1d5db;
-  border-radius: 10px;
-  overflow: hidden;
-  background: #f3f4f6;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
 }
+
+/* ----- Top toolbar ----- */
 
 .cs-toolbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: var(--space-4);
   flex-wrap: wrap;
-  gap: 10px;
-  padding: 10px 14px;
-  background: white;
-  border-bottom: 1px solid #e5e7eb;
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky;
+  top: var(--topbar-height);
+  z-index: 20;
 }
 
 .cs-toolbar-group {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   flex-wrap: wrap;
+}
+
+.cs-toolbar-group + .cs-toolbar-group {
+  padding-left: var(--space-4);
+  border-left: 1px solid var(--border);
+}
+
+.cs-toolbar-group:last-child {
+  margin-left: auto;
+  border-left: none;
 }
 
 .cs-toolbar button,
 .cs-file-btn {
-  padding: 7px 10px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: white;
-  color: #374151;
-  font-size: 13px;
+  height: 32px;
+  padding: 0 var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-caption);
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
-.cs-toolbar button:hover,
+.cs-toolbar button:hover:not(:disabled),
 .cs-file-btn:hover {
-  border-color: #2563eb;
-  color: #2563eb;
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
 }
 
 .cs-toolbar button:disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
+.cs-toolbar-group:last-child button {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--text-on-primary);
+}
+
+.cs-toolbar-group:last-child button:hover:not(:disabled) {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+
 .cs-checkbox {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
-  color: #374151;
+  font-size: var(--text-caption);
+  font-weight: 550;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.cs-checkbox input {
+  accent-color: var(--primary);
 }
 
 .cs-zoom-label {
-  font-size: 13px;
-  color: #6b7280;
-  min-width: 42px;
+  min-width: 44px;
   text-align: center;
+  font-size: var(--text-caption);
+  font-weight: 650;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
 }
+
+/* ----- Workspace body ----- */
 
 .cs-body {
   display: flex;
-  min-height: 600px;
+  min-height: 640px;
 }
 
 .cs-canvas-scroll {
   flex: 1;
+  min-width: 0;
   overflow: auto;
-  padding: 30px;
-  display: flex;
-  justify-content: center;
-  background: repeating-linear-gradient(45deg, #eceff3, #eceff3 10px, #e5e8ed 10px, #e5e8ed 20px);
+  padding: var(--space-8);
+  background: var(--bg-subtle);
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 22px 22px;
 }
 
 .cs-canvas-wrap {
-  height: fit-content;
+  width: fit-content;
+  margin: 0 auto;
 }
 
 .cs-canvas {
   position: relative;
-  background: white;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
-  background-image: linear-gradient(to right, #f1f5f9 1px, transparent 1px),
-    linear-gradient(to bottom, #f1f5f9 1px, transparent 1px);
-  background-size: 10px 10px;
-}
-
-.cs-block {
-  width: 100%;
-  height: 100%;
-  box-sizing: border-box;
-  border: 1px dashed transparent;
+  background: #ffffff;
   border-radius: 4px;
-  overflow: visible;
-  position: relative;
-}
-
-.cs-block-selected {
-  border-color: #2563eb;
-}
-
-.cs-block-text,
-.cs-block-sticky {
-  padding: 8px;
-}
-
-.cs-block-sticky {
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
-  border-radius: 6px;
-  font-family: "Comic Sans MS", cursive;
-}
-
-.cs-editable {
-  width: 100%;
-  height: 100%;
-  outline: none;
-  overflow: auto;
-  font-size: 14px;
-  color: #111827;
-}
-
-.cs-editable p {
-  margin: 0 0 6px 0;
-}
-
-.cs-text-toolbar {
-  position: absolute;
-  top: -42px;
-  left: 0;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: white;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  padding: 4px 6px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
-  z-index: 999;
-  flex-wrap: wrap;
-  max-width: 420px;
-}
-
-.cs-text-toolbar button,
-.cs-text-toolbar select {
-  border: 1px solid #e5e7eb;
-  background: white;
-  border-radius: 4px;
-  font-size: 12px;
-  padding: 4px 6px;
-  cursor: pointer;
-}
-
-.cs-highlight-swatch {
-  width: 18px;
-  height: 18px;
-  border-radius: 3px;
-  padding: 0;
-  border: 1px solid #d1d5db;
-}
-
-.cs-block-image {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  pointer-events: none;
-}
-
-.cs-image-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  border: 2px dashed #cbd5e1;
-  border-radius: 6px;
-  color: #9ca3af;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.cs-table {
-  width: 100%;
-  height: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.cs-table td {
-  border: 1px solid #d1d5db;
-  padding: 4px 6px;
-  outline: none;
-  min-width: 30px;
-}
-
-.cs-code {
-  width: 100%;
-  height: 100%;
-  background: #0f172a;
-  color: #e2e8f0;
-  font-family: "Courier New", monospace;
-  font-size: 13px;
-  border: none;
-  outline: none;
-  resize: none;
-  padding: 8px;
-  box-sizing: border-box;
-  border-radius: 4px;
-}
-
-.cs-inspector {
-  width: 230px;
-  background: white;
-  border-left: 1px solid #e5e7eb;
-  padding: 16px;
-  overflow-y: auto;
-}
-
-.cs-inspector h4 {
-  margin: 0 0 10px 0;
-  color: #111827;
-}
-
-.cs-inspector hr {
-  border: none;
-  border-top: 1px solid #e5e7eb;
-  margin: 14px 0;
-}
-
-.cs-inspector-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.cs-inspector-row label {
-  display: flex;
-  flex-direction: column;
-  font-size: 12px;
-  color: #6b7280;
-  gap: 4px;
-}
-
-.cs-inspector button {
-  padding: 6px 10px;
-  font-size: 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: white;
-  cursor: pointer;
-}
-
-.cs-inspector button:hover {
-  border-color: #2563eb;
-  color: #2563eb;
-}
-
-.cs-hint {
-  font-size: 13px;
-  color: #9ca3af;
-}
-
-.cs-page-tabs {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-}
-
-.cs-page-tab {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  box-shadow:
+    0 0 0 1px var(--border-strong),
+    var(--shadow-lg);
   overflow: hidden;
 }
 
-.cs-page-tab.active {
-  border-color: #2563eb;
+/* ----- Blocks ----- */
+
+.cs-block {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  color: #111827; /* content sits on the white page in both themes */
+  transition: border-color var(--transition-fast);
 }
 
-.cs-page-tab button {
-  border: none;
-  background: white;
-  padding: 4px 10px;
-  cursor: pointer;
-  font-size: 13px;
+.cs-block:hover {
+  border-color: var(--indigo-300);
 }
 
-.cs-page-tab.active button {
-  color: #2563eb;
-  font-weight: 700;
-}
-
-.cs-page-tab span {
-  padding: 0 6px;
-  cursor: pointer;
-  color: #9ca3af;
-  font-size: 12px;
-}
-
-.cs-page-tab span:hover {
-  color: #dc2626;
-}
-
-.cs-toolbar button,
-.cs-toolbar input,
-.cs-toolbar select,
-.cs-text-toolbar button,
-.cs-text-toolbar input,
-.cs-text-toolbar select,
-.cs-inspector button,
-.cs-inspector input,
-.cs-inspector select,
-.cs-page-tab button {
-  color: #111827;
-  background-color: #ffffff;
-  -webkit-text-fill-color: #111827;
-  opacity: 1;
-}
-
-.cs-inspector input:not([type="color"]),
-.cs-inspector select {
-  box-sizing: border-box;
-  min-width: 0;
-  padding: 6px 8px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #111827;
-  font-size: 12px;
-}
-
-.cs-inspector input[type="color"] {
-  width: 54px;
-  height: 30px;
-  padding: 2px;
-  border: 1px solid #d1d5db;
-  border-radius: 5px;
-  background: #ffffff;
-  cursor: pointer;
+.cs-block-selected {
+  border-color: var(--indigo-500) !important;
+  box-shadow: 0 0 0 1px var(--indigo-500);
 }
 
 .cs-block-controls {
   position: absolute;
-  top: -42px;
-  right: 0;
+  top: -38px;
+  left: 0;
+  z-index: 30;
   display: flex;
-  align-items: center;
   gap: 4px;
   padding: 4px;
-  background: #ffffff;
-  border: 1px solid #d1d5db;
-  border-radius: 7px;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
-  z-index: 1000;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  white-space: nowrap;
 }
 
 .cs-block-controls button {
-  border: 1px solid #e5e7eb;
-  border-radius: 4px;
-  background: #ffffff;
-  color: #111827;
-  padding: 4px 7px;
-  font-size: 11px;
+  height: 26px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .cs-block-controls button:hover {
-  border-color: #2563eb;
-  color: #2563eb;
-}
-
-.cs-block-controls .cs-block-delete:hover {
-  border-color: #dc2626;
-  color: #dc2626;
+  background: var(--surface-hover);
+  color: var(--text);
 }
 
 .cs-block-drag-handle {
   cursor: grab;
-  user-select: none;
+  color: var(--text-muted) !important;
+  letter-spacing: -2px;
 }
 
 .cs-block-drag-handle:active {
   cursor: grabbing;
 }
 
-.cs-editable,
-.cs-editable * {
-  font-family: Arial, sans-serif;
-  color: #111827;
+.cs-block-delete:hover {
+  background: var(--danger-soft) !important;
+  color: var(--danger) !important;
+}
+
+/* ----- Editable text ----- */
+
+.cs-editable {
+  width: 100%;
+  height: 100%;
+  padding: 10px 12px;
+  overflow: auto;
+  font-size: 14px;
+  line-height: 1.5;
+  outline: none;
+  cursor: default;
+}
+
+.cs-editable-active {
+  cursor: text;
+  background: rgba(99, 102, 241, 0.04);
 }
 
 .cs-editable h1,
 .cs-editable h2,
-.cs-editable h3,
-.cs-editable h4,
-.cs-editable h5,
-.cs-editable h6 {
-  margin: 0 0 8px;
+.cs-editable h3 {
+  margin: 0 0 6px;
   color: #111827;
-  font-family: Arial, sans-serif;
-  line-height: 1.25;
 }
 
 .cs-editable h1 {
-  font-size: 24px;
-  font-weight: 800;
+  font-size: 20px;
 }
 
 .cs-editable h2 {
-  font-size: 20px;
-  font-weight: 750;
+  font-size: 17px;
 }
 
 .cs-editable h3 {
-  font-size: 17px;
-  font-weight: 700;
+  font-size: 15px;
 }
 
-.cs-editable p,
-.cs-editable li {
+.cs-editable p {
   margin: 0 0 6px;
-  font-size: 14px;
-  line-height: 1.5;
-  color: #111827;
 }
 
 .cs-editable ul,
 .cs-editable ol {
-  margin: 6px 0;
-  padding-left: 22px;
+  margin: 0 0 6px;
+  padding-left: 20px;
 }
 
-.cs-editable code {
-  font-family: "Courier New", monospace;
-  font-size: 0.92em;
-  color: #111827;
-  background: #f3f4f6;
-  padding: 1px 4px;
+.editor-flashcard-content hr {
+  border: none;
+  border-top: 1px dashed #c7d2fe;
+  margin: 8px 0;
+}
+
+/* ----- Text formatting toolbar ----- */
+
+.cs-text-toolbar {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  max-width: 460px;
+  padding: 6px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+}
+
+.cs-text-toolbar button,
+.cs-text-toolbar select {
+  height: 28px;
+  min-width: 28px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cs-text-toolbar button:hover,
+.cs-text-toolbar select:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.cs-text-toolbar select {
+  border-color: var(--border);
+  background: var(--surface);
+  max-width: 96px;
+}
+
+.cs-text-toolbar input[type="color"] {
+  width: 28px;
+  height: 28px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.cs-highlight-swatch {
+  width: 22px !important;
+  min-width: 22px !important;
+  height: 22px !important;
+  padding: 0 !important;
+  border-radius: 5px !important;
+  border: 1px solid var(--border) !important;
+}
+
+/* ----- Block content types ----- */
+
+.cs-block-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #fff;
+}
+
+.cs-image-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #6366f1;
+  background: #eef2ff;
+  border: 1.5px dashed #a5b4fc;
   border-radius: 4px;
+  cursor: pointer;
+  text-align: center;
+  padding: 8px;
+}
+
+.cs-table {
+  width: 100%;
+  height: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  background: #fff;
+}
+
+.cs-table td {
+  border: 1px solid #cbd5e1;
+  padding: 5px 8px;
+  min-width: 40px;
+  color: #111827;
+}
+
+.cs-table td:focus {
+  outline: 2px solid #6366f1;
+  outline-offset: -2px;
+}
+
+.cs-code {
+  width: 100%;
+  height: 100%;
+  border: none;
+  resize: none;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  padding: 10px 12px;
+  border-radius: 4px;
+  outline: none;
+}
+
+/* ----- Inspector sidebar ----- */
+
+.cs-inspector {
+  width: 216px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  padding: var(--space-4);
+  overflow-y: auto;
+}
+
+.cs-inspector h4 {
+  font-size: var(--text-label);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: var(--space-3);
+}
+
+.cs-inspector hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: var(--space-4) 0;
+}
+
+.cs-inspector-row {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.cs-inspector-row button {
+  flex: 1;
+  height: 30px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color var(--transition-fast);
+}
+
+.cs-inspector-row button:hover {
+  background: var(--surface-hover);
+}
+
+.cs-inspector-row label {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-caption);
+  font-weight: 550;
+  color: var(--text-secondary);
+}
+
+.cs-inspector-row input[type="color"] {
+  width: 34px;
+  height: 28px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.cs-page-tabs {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+
+.cs-page-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.cs-page-tab button {
+  width: 42px;
+  height: 52px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-inset);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.cs-page-tab.active button {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary) inset;
+}
+
+.cs-page-tab span {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 17px;
+  height: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+
+.cs-hint {
+  font-size: var(--text-caption);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* ----- Responsive ----- */
+
+@media (max-width: 900px) {
+  .cs-body {
+    flex-direction: column;
+  }
+
+  .cs-inspector {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
+
+  .cs-canvas-scroll {
+    padding: var(--space-4);
+  }
+
+  .cs-toolbar {
+    top: 0;
+    position: static;
+  }
 }

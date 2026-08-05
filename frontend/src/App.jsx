@@ -5,6 +5,7 @@ import Tesseract from "tesseract.js";
 import { auth } from "./firebase";
 import {
   createUserWithEmailAndPassword,
+  onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
@@ -13,6 +14,13 @@ import CheatSheetEditor from "./CheatSheetEditor";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import mermaid from "mermaid";
+
+import Sidebar from "./components/layout/Sidebar";
+import TopBar from "./components/layout/TopBar";
+import Icon from "./components/ui/Icon";
+import EmptyState from "./components/ui/EmptyState";
+import ConfirmDialog from "./components/ui/ConfirmDialog";
+import { ToastProvider, useToast } from "./components/ui/Toast";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -91,34 +99,36 @@ function MermaidDiagram({ chart }) {
 
 function MarkdownContent({ content, emptyMessage = "No content available." }) {
   if (!content) {
-    return <div>{emptyMessage}</div>;
+    return <p className="empty-resource-message">{emptyMessage}</p>;
   }
 
   return (
-    <ReactMarkdown
-      components={{
-        code({ className, children, ...props }) {
-          const languageMatch = /language-(\w+)/.exec(className || "");
-          const language = languageMatch?.[1]?.toLowerCase();
+    <div className="markdown-body">
+      <ReactMarkdown
+        components={{
+          code({ className, children, ...props }) {
+            const languageMatch = /language-(\w+)/.exec(className || "");
+            const language = languageMatch?.[1]?.toLowerCase();
 
-          if (language === "mermaid") {
+            if (language === "mermaid") {
+              return (
+                <MermaidDiagram
+                  chart={String(children).replace(/\n$/, "")}
+                />
+              );
+            }
+
             return (
-              <MermaidDiagram
-                chart={String(children).replace(/\n$/, "")}
-              />
+              <code className={className} {...props}>
+                {children}
+              </code>
             );
-          }
-
-          return (
-            <code className={className} {...props}>
-              {children}
-            </code>
-          );
-        },
-      }}
-    >
-      {content}
-    </ReactMarkdown>
+          },
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
   );
 }
 
@@ -279,7 +289,42 @@ async function mermaidChartToDataUrl(chart) {
   });
 }
 
+function toMillis(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (typeof value._seconds === "number") return value._seconds * 1000;
+  if (typeof value.seconds === "number") return value.seconds * 1000;
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
 
+function formatNoteDate(value) {
+  const millis = toMillis(value);
+
+  if (!millis) {
+    return "";
+  }
+
+  return new Date(millis).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function ContentSkeleton() {
+  return (
+    <div className="skeleton-stack" aria-hidden="true">
+      <div className="skeleton" style={{ height: 18, width: "45%" }} />
+      <div className="skeleton" style={{ height: 12, width: "95%" }} />
+      <div className="skeleton" style={{ height: 12, width: "88%" }} />
+      <div className="skeleton" style={{ height: 12, width: "92%" }} />
+      <div className="skeleton" style={{ height: 18, width: "35%", marginTop: 10 }} />
+      <div className="skeleton" style={{ height: 12, width: "90%" }} />
+      <div className="skeleton" style={{ height: 12, width: "80%" }} />
+    </div>
+  );
+}
 
 function ResourceSectionPicker({
   content,
@@ -336,10 +381,63 @@ function ResourceSectionPicker({
   );
 }
 
+const RESOURCE_TABS = ["keypoints", "flashcards", "summary"];
+
+const PAGE_TITLES = {
+  dashboard: "Dashboard",
+  upload: "Upload Notes",
+  keypoints: "Study Resources",
+  flashcards: "Study Resources",
+  summary: "Study Resources",
+  editor: "Cheat Sheet Builder",
+  saved: "Saved Notes",
+  subjectsummary: "Subject Summary",
+};
+
+const INPUT_METHODS = [
+  {
+    id: "paste",
+    name: "Type or paste",
+    icon: "type",
+    desc: "Write or paste notes directly into the editor below.",
+    format: "Manual text",
+  },
+  {
+    id: "txt",
+    name: "Text file",
+    icon: "fileText",
+    desc: "Upload a plain text file with your notes.",
+    format: ".txt",
+    accept: ".txt",
+  },
+  {
+    id: "pdf",
+    name: "PDF document",
+    icon: "bookOpen",
+    desc: "Extract text and lecture visuals from slides or notes.",
+    format: ".pdf",
+    accept: ".pdf",
+  },
+  {
+    id: "image",
+    name: "Image (OCR)",
+    icon: "scan",
+    desc: "Read text from photos of notes using OCR.",
+    format: ".png .jpg .jpeg",
+    accept: ".png,.jpg,.jpeg",
+  },
+];
+
 function App() {
+  const toast = useToast();
+
   const [user, setUser] = useState(null);
+  const [bootingAuth, setBootingAuth] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [authMode, setAuthMode] = useState("login");
+  const [showPassword, setShowPassword] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
 
   const [notes, setNotes] = useState("");
   const [keyPoints, setKeyPoints] = useState("");
@@ -368,7 +466,7 @@ function App() {
 
   const [loading, setLoading] = useState("");
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState("keypoints");
+  const [activeTab, setActiveTab] = useState("dashboard");
 
   const [savedNoteTab, setSavedNoteTab] = useState("original");
 
@@ -376,6 +474,28 @@ function App() {
   const editorRef = useRef(null);
   const [editorSource, setEditorSource] = useState("keypoints");
   const [layoutDirty, setLayoutDirty] = useState(false);
+
+  const [inputMethod, setInputMethod] = useState("paste");
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+
+      if (firebaseUser) {
+        fetchSubjects(firebaseUser);
+      }
+
+      setBootingAuth(false);
+    });
+
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filteredSavedNotes = savedNotes
     .filter((note) =>
@@ -390,17 +510,8 @@ function App() {
         );
       }
 
-      const getMillis = (value) => {
-        if (!value) return 0;
-        if (typeof value.toMillis === "function") return value.toMillis();
-        if (typeof value._seconds === "number") return value._seconds * 1000;
-        if (typeof value.seconds === "number") return value.seconds * 1000;
-        const parsed = new Date(value).getTime();
-        return Number.isNaN(parsed) ? 0 : parsed;
-      };
-
-      const aTime = getMillis(a.createdAt);
-      const bTime = getMillis(b.createdAt);
+      const aTime = toMillis(a.createdAt);
+      const bTime = toMillis(b.createdAt);
       return savedNoteSort === "oldest" ? aTime - bTime : bTime - aTime;
     });
 
@@ -483,6 +594,27 @@ function App() {
     }
   }
 
+  async function submitAuth(event) {
+    event.preventDefault();
+
+    if (!email.trim() || !password) {
+      setError("Please enter your email and password.");
+      return;
+    }
+
+    setAuthLoading(true);
+
+    try {
+      if (authMode === "login") {
+        await loginUser();
+      } else {
+        await registerUser();
+      }
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
   async function logoutUser() {
     await signOut(auth);
     setUser(null);
@@ -493,7 +625,7 @@ function App() {
 
   const extractKeyPoints = async (inputNotes = notes) => {
     try {
-      setLoading("Extracting key concpts...");
+      setLoading("Extracting key concepts...");
       setError("");
 
       const response = await fetch(`${API_URL}/api/process-notes`, {
@@ -520,8 +652,7 @@ function App() {
     }
   };
 
-  const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
+  const handleFile = async (file) => {
     if (!file) return;
 
     setError("");
@@ -530,140 +661,155 @@ function App() {
     if (file.name.endsWith(".txt")) {
       try {
         setLoading("Reading text file...");
+        setUploadedFile({ name: file.name, type: "Text file" });
 
         const text = await file.text();
         setNotes(text);
-        setActiveTab("keypoints")
-        alert("Text file loaded. Please review and edit the text before generating key points.");
+        toast.info(
+          "Text file loaded. Review and edit the text before generating key points."
+        );
       } catch (err) {
         console.error(err);
         setError("Failed to read text file.");
+        setUploadedFile(null);
       } finally {
         setLoading("");
       }
     } else if (file.name.endsWith(".pdf")) {
-  try {
-    setLoading("Extracting text and rendering PDF pages...");
+      try {
+        setLoading("Extracting text and rendering PDF pages...");
+        setUploadedFile({ name: file.name, type: "PDF document" });
 
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
-    let pdfText = "";
-    const renderedPages = [];
+        let pdfText = "";
+        const renderedPages = [];
 
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
 
-      const pageText = textContent.items
-        .map((item) => item.str)
-        .join(" ");
+          const pageText = textContent.items
+            .map((item) => item.str)
+            .join(" ");
 
-      pdfText += `Page ${i}\n${pageText}\n\n`;
+          pdfText += `Page ${i}\n${pageText}\n\n`;
 
-      const viewport = page.getViewport({ scale: 1.2 });
-      const canvas = document.createElement("canvas");
-      const context = canvas.getContext("2d");
+          const viewport = page.getViewport({ scale: 1.2 });
+          const canvas = document.createElement("canvas");
+          const context = canvas.getContext("2d");
 
-      if (!context) {
-        throw new Error(`Unable to render PDF page ${i}`);
+          if (!context) {
+            throw new Error(`Unable to render PDF page ${i}`);
+          }
+
+          canvas.width = Math.ceil(viewport.width);
+          canvas.height = Math.ceil(viewport.height);
+
+          await page.render({
+            canvasContext: context,
+            viewport,
+          }).promise;
+
+          renderedPages.push({
+            pageNumber: i,
+            text: pageText,
+            imageUrl: canvas.toDataURL("image/jpeg", 0.75),
+          });
+        }
+
+        setPdfPages(renderedPages);
+        setSelectedPdfPages([]);
+        setNotes(pdfText);
+
+        await Promise.all([
+          extractKeyPoints(pdfText),
+          selectVisualPages(renderedPages),
+        ]);
+      } catch (err) {
+        console.error(err);
+        setPdfPages([]);
+        setSelectedPdfPages([]);
+        setUploadedFile(null);
+        setError("Failed to read or render PDF file.");
+      } finally {
+        setLoading("");
       }
-
-      canvas.width = Math.ceil(viewport.width);
-      canvas.height = Math.ceil(viewport.height);
-
-      await page.render({
-        canvasContext: context,
-        viewport,
-      }).promise;
-
-      renderedPages.push({
-        pageNumber: i,
-        text: pageText,
-        imageUrl: canvas.toDataURL("image/jpeg", 0.75),
-      });
-    }
-
-    setPdfPages(renderedPages);
-    setSelectedPdfPages([]);
-    setNotes(pdfText);
-
-    await Promise.all([
-     extractKeyPoints(pdfText),
-     selectVisualPages(renderedPages),
-  ]);
-  } catch (err) {
-    console.error(err);
-    setPdfPages([]);
-    setSelectedPdfPages([]);
-    setError("Failed to read or render PDF file.");
-  } finally {
-    setLoading("");
-  }
     } else if (
       file.name.endsWith(".png") ||
       file.name.endsWith(".jpg") ||
       file.name.endsWith(".jpeg")
     ) {
       try {
-        setLoading("Extracting text from image...");
+        setLoading("Reading image using OCR...");
+        setUploadedFile({ name: file.name, type: "Image (OCR)" });
 
         const result = await Tesseract.recognize(file, "eng");
         const imageText = result.data.text.trim();
 
         setNotes(imageText);
-        setActiveTab("keypoints");
-        alert("Image text extracted. Please review and edit it before generating key points.");
+        toast.info(
+          "Image text extracted. Review and clean up the text before generating key points."
+        );
       } catch (err) {
         console.error(err);
         setError("Failed to read image file.");
+        setUploadedFile(null);
       } finally {
         setLoading("");
       }
     } else {
+      setUploadedFile(null);
       setError("Please upload a .txt, .pdf, .png, .jpg, or .jpeg file only.");
     }
   };
 
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+    event.target.value = "";
+    handleFile(file);
+  };
+
   async function selectVisualPages(pages) {
-  try {
-    const pageTextData = pages.map((page) => ({
-      pageNumber: page.pageNumber,
-      text: page.text,
-    }));
+    try {
+      const pageTextData = pages.map((page) => ({
+        pageNumber: page.pageNumber,
+        text: page.text,
+      }));
 
-    const response = await fetch(
-      `${API_URL}/api/select-visual-pages`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          pages: pageTextData,
-        }),
-      }
-    );
-
-    const data = await response.json();
-    console.log("AI selected pages:", data.selectedPages);
-
-    if (!response.ok) {
-      throw new Error(
-        data.error || "Failed to select lecture visuals"
+      const response = await fetch(
+        `${API_URL}/api/select-visual-pages`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            pages: pageTextData,
+          }),
+        }
       );
-    }
 
-    setSelectedPdfPages(
-      Array.isArray(data.selectedPages)
-        ? data.selectedPages
-        : []
-    );
-  } catch (error) {
-    console.error("Visual page selection error:", error);
-    setSelectedPdfPages([]);
+      const data = await response.json();
+      console.log("AI selected pages:", data.selectedPages);
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "Failed to select lecture visuals"
+        );
+      }
+
+      setSelectedPdfPages(
+        Array.isArray(data.selectedPages)
+          ? data.selectedPages
+          : []
+      );
+    } catch (error) {
+      console.error("Visual page selection error:", error);
+      setSelectedPdfPages([]);
+    }
   }
-}
 
   const generateFlashcards = async () => {
     try {
@@ -698,8 +844,8 @@ function App() {
 
   const generateSummary = async () => {
     if (!keyPoints.trim()) {
-       alert("Please generate key points first."); 
-       return; 
+      toast.info("Generate key points first — the summary is built from them.");
+      return;
     }
 
     try {
@@ -747,6 +893,7 @@ function App() {
 
       setSubject(subjectName);
       setNewSubject("");
+      toast.success(`Subject "${subjectName}" created and selected.`);
     } catch (error) {
       console.error("Error adding subject:", error);
       setError("Failed to add subject.");
@@ -754,13 +901,13 @@ function App() {
   }
 
   async function saveNote() {
+    if (!subject.trim()) {
+      toast.error("Select or create a subject before saving.");
+      return;
+    }
+
     setLoading("Saving note...");
     try {
-      if (!subject.trim()) {
-        alert("Please select or create a subject first.");
-        return;
-      }
-
       const token = await user.getIdToken();
       const currentLayout = editorRef.current?.getPages?.() ?? cheatSheetLayout;
 
@@ -806,7 +953,9 @@ function App() {
         throw new Error(data.error || "Failed to save note");
       }
 
-      alert(isUpdating ? "Note updated successfully!" : "Note saved successfully!");
+      toast.success(
+        isUpdating ? "Note updated successfully." : "Note saved successfully."
+      );
       setCheatSheetLayout(currentLayout);
       setLayoutDirty(false);
 
@@ -830,7 +979,7 @@ function App() {
       await fetchSubjects(user);
     } catch (error) {
       console.error("Error saving note:", error);
-      alert(error.message || "Failed to save note");
+      toast.error(error.message || "Failed to save note.");
     }
     setLoading("");
   }
@@ -838,12 +987,13 @@ function App() {
   async function fetchSavedNote() {
     try {
       if (!user) {
-        alert("Please log in first.");
+        toast.error("Please log in first.");
         return;
       }
 
       if (!subject.trim()) {
-        alert("Please select a subject first.");
+        toast.info("Select a subject first to load its saved notes.");
+        setActiveTab("saved");
         return;
       }
 
@@ -865,23 +1015,23 @@ function App() {
       const data = await response.json();
 
       if (Array.isArray(data)) {
-  setSavedNotes(data);
-  setEditingSavedNoteId(null);
-  setSavedNoteDraft(null);
+        setSavedNotes(data);
+        setEditingSavedNoteId(null);
+        setSavedNoteDraft(null);
 
-  if (data.length > 0) {
-    setSelectedSavedNote(data[0]);
-  } else {
-    setSelectedSavedNote(null);
-  }
+        if (data.length > 0) {
+          setSelectedSavedNote(data[0]);
+        } else {
+          setSelectedSavedNote(null);
+        }
 
-  await fetchSavedSubjectSummary();
-  setActiveTab("saved");
-} else {
-  setSavedNotes([]);
-  setSelectedSavedNote(null);
-  setActiveTab("saved");
-}
+        await fetchSavedSubjectSummary();
+        setActiveTab("saved");
+      } else {
+        setSavedNotes([]);
+        setSelectedSavedNote(null);
+        setActiveTab("saved");
+      }
     } catch (error) {
       console.error("Error fetching saved notes:", error);
       setError("Failed to fetch saved notes.");
@@ -889,7 +1039,7 @@ function App() {
       setLoading("");
     }
   }
-  
+
   async function fetchSavedSubjectSummary() {
     if (!user || !subject) return;
 
@@ -914,7 +1064,7 @@ function App() {
   async function generateSubjectSummary() {
     try {
       if (!subject) {
-        alert("Please select a subject.");
+        toast.info("Select a subject first.");
         return;
       }
 
@@ -938,16 +1088,15 @@ function App() {
       setSubjectSummary(data.summary || "");
     } catch (error) {
       console.error(error);
-      alert(error.message || "Failed to generate subject summary.");
+      toast.error(error.message || "Failed to generate subject summary.");
     } finally {
       setLoading("");
     }
   }
 
   async function saveSubjectSummary() {
-    setLoading("Saving subject summary...");
     if (!subjectSummary.trim()) {
-      alert("Generate or enter a subject summary first.");
+      toast.info("Generate or enter a subject summary first.");
       return;
     }
 
@@ -971,10 +1120,10 @@ function App() {
         throw new Error(data.error || "Failed to save subject summary");
       }
 
-      alert("Subject summary saved successfully!");
+      toast.success("Subject summary saved successfully.");
     } catch (error) {
       console.error(error);
-      alert(error.message || "Failed to save subject summary.");
+      toast.error(error.message || "Failed to save subject summary.");
     } finally {
       setLoading("");
     }
@@ -982,7 +1131,7 @@ function App() {
 
   function exportSubjectSummaryAsPDF() {
     if (!subjectSummary.trim()) {
-      alert("There is no subject summary to export.");
+      toast.info("There is no subject summary to export yet.");
       return;
     }
 
@@ -1086,50 +1235,61 @@ function App() {
       );
       setSelectedSavedNote(updatedNote);
       setSavedNoteDraft(null);
-      alert("Saved note updated successfully!");
+      toast.success("Saved note updated successfully.");
     } catch (error) {
       console.error(error);
-      alert(error.message || "Failed to update saved note.");
+      toast.error(error.message || "Failed to update saved note.");
     } finally {
       setLoading("");
     }
   }
 
-
   async function deleteSavedNote(noteId) {
-  try {
-    const token = await user.getIdToken();
+    try {
+      const token = await user.getIdToken();
 
-    await fetch(
-      `${API_URL}/saved-notes/${subject}/${noteId}`,
-      {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      await fetch(
+        `${API_URL}/saved-notes/${subject}/${noteId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const updatedNotes = savedNotes.filter(
+        (note) => note.id !== noteId
+      );
+
+      setSavedNotes(updatedNotes);
+
+      if (editingSavedNoteId === noteId) {
+        setEditingSavedNoteId(null);
+        setCheatSheetLayout(null);
       }
-    );
 
-    const updatedNotes = savedNotes.filter(
-      (note) => note.id !== noteId
-    );
+      if (updatedNotes.length > 0) {
+        setSelectedSavedNote(updatedNotes[0]);
+      } else {
+        setSelectedSavedNote(null);
+      }
 
-    setSavedNotes(updatedNotes);
-
-    if (editingSavedNoteId === noteId) {
-      setEditingSavedNoteId(null);
-      setCheatSheetLayout(null);
+      toast.success("Note deleted.");
+    } catch (error) {
+      console.error("Error deleting note:", error);
+      toast.error("Failed to delete note.");
     }
+  }
 
-    if (updatedNotes.length > 0) {
-      setSelectedSavedNote(updatedNotes[0]);
-    } else {
-      setSelectedSavedNote(null);
-    }
-  } catch (error) {
-    console.error("Error deleting note:", error);
-    alert("Failed to delete note");
-  }}
+  function requestDeleteSavedNote(note) {
+    setConfirmDialog({
+      title: "Delete this note?",
+      message: `"${note.title || "Untitled Note"}" and all of its generated study resources will be permanently removed. This cannot be undone.`,
+      confirmLabel: "Delete note",
+      onConfirm: () => deleteSavedNote(note.id),
+    });
+  }
 
   const exportNoteAsPDF = (note) => {
     const doc = new jsPDF();
@@ -1157,7 +1317,6 @@ function App() {
 
       y += 4;
     };
-
 
     doc.setFontSize(18);
     doc.text(note.title || "Exported Note", margin, y);
@@ -1194,378 +1353,1387 @@ function App() {
     doc.save(`${note.title || "stitch-note"}.pdf`);
   };
 
-const openCheatSheetBuilder = () => {
-  setActiveTab("editor");
-};
+  const openCheatSheetBuilder = () => {
+    setActiveTab("editor");
+  };
 
-const addResourceSectionToEditor = async (section, index) => {
-  setActiveTab("editor");
+  const addResourceSectionToEditor = async (section, index) => {
+    setActiveTab("editor");
 
-  const mermaidContent = extractMermaidChart(section);
+    const mermaidContent = extractMermaidChart(section);
 
-  try {
-    if (mermaidContent) {
-      const imageUrl = await mermaidChartToDataUrl(
-        mermaidContent.chart
-      );
+    try {
+      if (mermaidContent) {
+        const imageUrl = await mermaidChartToDataUrl(
+          mermaidContent.chart
+        );
 
-      if (mermaidContent.remainingText) {
-        editorRef.current?.addTextBlock(
-          markdownSectionToHtml(
-            mermaidContent.remainingText
-          ),
+        if (mermaidContent.remainingText) {
+          editorRef.current?.addTextBlock(
+            markdownSectionToHtml(
+              mermaidContent.remainingText
+            ),
+            {
+              x: 40 + (index % 3) * 30,
+              y: 40 + (index % 5) * 30,
+              width: 340,
+              height: 100,
+            }
+          );
+        }
+
+        editorRef.current?.addImageBlock(
+          { imageUrl },
           {
-            x: 40 + (index % 3) * 30,
-            y: 40 + (index % 5) * 30,
-            width: 340,
-            height: 100,
+            x: 60 + (index % 3) * 30,
+            y: mermaidContent.remainingText
+              ? 160 + (index % 5) * 30
+              : 40 + (index % 5) * 30,
+            width: 480,
+            height: 320,
           }
         );
+
+        return;
       }
 
-      editorRef.current?.addImageBlock(
-        { imageUrl },
-        {
-          x: 60 + (index % 3) * 30,
-          y: mermaidContent.remainingText
-            ? 160 + (index % 5) * 30
-            : 40 + (index % 5) * 30,
-          width: 480,
-          height: 320,
-        }
-      );
-
-      return;
-    }
-
-    editorRef.current?.addTextBlock(
-      markdownSectionToHtml(section),
-      {
-        x: 40 + (index % 3) * 30,
-        y: 40 + (index % 5) * 30,
-      }
-    );
-  } catch (error) {
-  console.error("Failed to add Mermaid diagram:", error);
-
-  alert(
-    `The Mermaid diagram could not be added: ${
-      error instanceof Error ? error.message : "Unknown error"
-    }`
-  );
-}
-};
-
-const addFlashcardToEditor = (card, index) => {
-  setActiveTab("editor");
-
-  setTimeout(() => {
-    editorRef.current?.addFlashcardBlock(card, {
-      x: 50 + (index % 3) * 30,
-      y: 50 + (index % 5) * 30,
-    });
-  }, 0);
-};
-
-const addVisualToEditor = (visual, index) => {
-  setActiveTab("editor");
-
-  setTimeout(() => {
-    editorRef.current?.addImageBlock(
-      {
-        imageUrl: visual.imageUrl,
-      },
-      {
-        x: 60 + (index % 3) * 30,
-        y: 60 + (index % 5) * 30,
-      }
-    );
-  }, 0);
-};
-
-const addAllSectionsToEditor = (content) => {
-  const sections = splitMarkdownSections(content);
-
-  if (!sections.length) {
-    alert("There is no content available to add.");
-    return;
-  }
-
-  setActiveTab("editor");
-
-  setTimeout(() => {
-    sections.forEach((section, index) => {
       editorRef.current?.addTextBlock(
         markdownSectionToHtml(section),
         {
-          x: 30 + (index % 2) * 370,
-          y: 30 + Math.floor(index / 2) * 190,
-          width: 340,
-          height: 160,
+          x: 40 + (index % 3) * 30,
+          y: 40 + (index % 5) * 30,
         }
       );
-    });
-  }, 0);
-};
+    } catch (error) {
+      console.error("Failed to add Mermaid diagram:", error);
+
+      toast.error(
+        `The Mermaid diagram could not be added: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    }
+  };
+
+  const addFlashcardToEditor = (card, index) => {
+    setActiveTab("editor");
+
+    setTimeout(() => {
+      editorRef.current?.addFlashcardBlock(card, {
+        x: 50 + (index % 3) * 30,
+        y: 50 + (index % 5) * 30,
+      });
+    }, 0);
+  };
+
+  const addVisualToEditor = (visual, index) => {
+    setActiveTab("editor");
+
+    setTimeout(() => {
+      editorRef.current?.addImageBlock(
+        {
+          imageUrl: visual.imageUrl,
+        },
+        {
+          x: 60 + (index % 3) * 30,
+          y: 60 + (index % 5) * 30,
+        }
+      );
+    }, 0);
+  };
+
+  const addAllSectionsToEditor = (content) => {
+    const sections = splitMarkdownSections(content);
+
+    if (!sections.length) {
+      toast.info("There is no content available to add.");
+      return;
+    }
+
+    setActiveTab("editor");
+
+    setTimeout(() => {
+      sections.forEach((section, index) => {
+        editorRef.current?.addTextBlock(
+          markdownSectionToHtml(section),
+          {
+            x: 30 + (index % 2) * 370,
+            y: 30 + Math.floor(index / 2) * 190,
+            width: 340,
+            height: 160,
+          }
+        );
+      });
+    }, 0);
+  };
+
+  async function copyText(text, label = "Content") {
+    if (!text || !text.trim()) {
+      toast.info("There is nothing to copy yet.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copied to clipboard.`);
+    } catch (error) {
+      console.error("Clipboard error:", error);
+      toast.error("Could not copy to clipboard.");
+    }
+  }
+
+  function navigate(viewId) {
+    setMobileNavOpen(false);
+    setError("");
+
+    if (viewId === "resources") {
+      setActiveTab("keypoints");
+      return;
+    }
+
+    if (viewId === "saved") {
+      if (subject.trim()) {
+        fetchSavedNote();
+      } else {
+        setActiveTab("saved");
+      }
+      return;
+    }
+
+    if (viewId === "subjectsummary") {
+      setActiveTab("subjectsummary");
+      if (subject.trim()) {
+        fetchSavedSubjectSummary();
+      }
+      return;
+    }
+
+    setActiveTab(viewId);
+  }
+
+  const activeNav = RESOURCE_TABS.includes(activeTab)
+    ? "resources"
+    : activeTab;
+
+  const displayName =
+    user?.displayName || (user?.email ? user.email.split("@")[0] : "");
+
+  /* ================================================================
+     Authentication screen
+     ================================================================ */
+
+  if (bootingAuth) {
+    return (
+      <div className="app-booting">
+        <span className="spinner" />
+        Loading Stitch.io…
+      </div>
+    );
+  }
 
   if (!user) {
     return (
-      <div style={styles.page}>
-        <div style={styles.loginContainer}>
-          <div style={styles.loginCard}>
-            <h1 style={styles.loginTitle}>Login to Stitch.io</h1>
+      <div className="auth-page">
+        <div className="auth-hero">
+          <div className="auth-hero-brand">
+            <span className="sidebar-brand-mark">
+              <Icon name="logo" size={19} strokeWidth={2.2} />
+            </span>
+            Stitch.io
+          </div>
 
-            <p style={styles.loginSubtitle}>
-              Access your saved notes, flashcards and summaries
+          <div className="auth-hero-copy">
+            <h2>Turn lecture notes into revision-ready study material.</h2>
+            <p>
+              Upload slides, notes or photos and let Stitch.io stitch them into
+              key points, flashcards, summaries and printable cheat sheets.
             </p>
 
-            <input
-              style={styles.input}
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
+            <ul className="auth-hero-points">
+              <li>
+                <Icon name="checkCircle" size={17} />
+                AI key points, flashcards and summaries
+              </li>
+              <li>
+                <Icon name="checkCircle" size={17} />
+                PDF, image OCR and manual text input
+              </li>
+              <li>
+                <Icon name="checkCircle" size={17} />
+                Drag-and-drop cheat sheet builder with PNG/PDF export
+              </li>
+            </ul>
+          </div>
 
-            <input
-              style={styles.input}
-              placeholder="Password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+          <p className="auth-hero-footnote">
+            Built for students. Your notes stay in your account.
+          </p>
+        </div>
 
-            <button style={styles.loginButton} onClick={loginUser}>
-              Login
-            </button>
+        <div className="auth-panel">
+          <div className="auth-card">
+            <h1>
+              {authMode === "login" ? "Welcome back" : "Create your account"}
+            </h1>
+            <p className="auth-card-sub">
+              {authMode === "login"
+                ? "Log in to access your saved notes, flashcards and summaries."
+                : "Register to start building your personal revision library."}
+            </p>
 
-            <button style={styles.registerButton} onClick={registerUser}>
-              Register
-            </button>
+            <form className="auth-form" onSubmit={submitAuth} noValidate>
+              <div className="field">
+                <label className="field-label" htmlFor="auth-email">
+                  Email
+                </label>
+                <input
+                  id="auth-email"
+                  className="input"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="you@university.edu"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
 
-            {error && <p style={styles.error}>{error}</p>}
+              <div className="field">
+                <label className="field-label" htmlFor="auth-password">
+                  Password
+                </label>
+                <div className="auth-password-wrap">
+                  <input
+                    id="auth-password"
+                    className="input"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete={
+                      authMode === "login" ? "current-password" : "new-password"
+                    }
+                    placeholder={
+                      authMode === "login"
+                        ? "Your password"
+                        : "At least 6 characters"
+                    }
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="auth-password-toggle"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
+                  >
+                    <Icon name={showPassword ? "eyeOff" : "eye"} size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {error && (
+                <div className="banner banner-error" role="alert">
+                  <Icon name="alertCircle" size={16} />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="btn btn-primary btn-lg btn-block"
+                disabled={authLoading}
+              >
+                {authLoading && <span className="spinner" />}
+                {authMode === "login" ? "Log in" : "Create account"}
+              </button>
+            </form>
+
+            <p className="auth-switch">
+              {authMode === "login"
+                ? "New to Stitch.io?"
+                : "Already have an account?"}{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  setError("");
+                  setAuthMode(authMode === "login" ? "register" : "login");
+                }}
+              >
+                {authMode === "login" ? "Create an account" : "Log in instead"}
+              </button>
+            </p>
           </div>
         </div>
       </div>
     );
   }
 
+  /* ================================================================
+     Authenticated shell
+     ================================================================ */
+
+  const hasAnyNoteContent = Boolean(notes.trim());
+  const noteResourceCount =
+    (keyPoints.trim() ? 1 : 0) +
+    (summary.trim() ? 1 : 0) +
+    (flashcards.length ? 1 : 0);
+
   return (
-    <div style={styles.page}>
-      <div style={styles.container}>
-        <h1 style={styles.title}>Stitch.io</h1>
+    <div className="app-shell">
+      <Sidebar
+        activeView={activeNav}
+        onNavigate={navigate}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+        mobileOpen={mobileNavOpen}
+        onCloseMobile={() => setMobileNavOpen(false)}
+        subject={subject}
+        userEmail={user.email}
+        onLogout={logoutUser}
+      />
 
-        <p style={styles.subtitle}>
-          Upload or paste your study materials to generate key points,
-          flashcards, and summary sheets.
-        </p>
-
-        <div style={styles.card}>
-          <h2 style={styles.heading}>Subjects</h2>
-
-          <input
-            style={styles.input}
-            placeholder="Create new subject"
-            value={newSubject}
-            onChange={(e) => setNewSubject(e.target.value)}
-          />
-
-          <button style={styles.button} onClick={addSubject}>
-            Add Subject
-          </button>
-
-          <select
-            style={styles.input}
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-          >
-            <option value="">Select a subject</option>
-
-            {subjects.map((subj) => (
-              <option key={subj} value={subj}>
-                {subj}
-              </option>
-            ))}
-          </select>
-
-          <p>Current subject: {subject || "None selected"}</p>
-        </div>
-
-        <div style={styles.card}>
-          <h2 style={styles.heading}>Input Notes</h2>
-
-          <input
-  style={styles.input}
-  placeholder="Enter note title"
-  value={noteTitle}
-  onChange={(e) => setNoteTitle(e.target.value)}
-/>
-        <p style={styles.helperText}>
-          Review and edit your notes here before generating study materials.
-          For OCR image uploads, clean up any inaccurate text before continuing.
-        </p>
-
-        <textarea
-          style={styles.textarea}
-          placeholder="Paste your notes here..."
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
+      <div className="app-main">
+        <TopBar
+          pageTitle={PAGE_TITLES[activeTab] || "Stitch.io"}
+          subject={subject}
+          userEmail={user.email}
+          onOpenMobileNav={() => setMobileNavOpen(true)}
+          onLogout={logoutUser}
         />
 
-          <div style={styles.uploadBox}>
-            <p style={styles.uploadText}>
-              Or upload a .txt / .pdf / .png / .jpg file
-            </p>
+        <main className="app-content">
+          {(loading || error) && (
+            <div className="global-status">
+              {loading && (
+                <span className="status-pill" role="status">
+                  <span className="spinner" />
+                  {loading}
+                </span>
+              )}
 
-            <input
-              type="file"
-              accept=".txt,.pdf,.png,.jpg,.jpeg"
-              onChange={handleFileUpload}
-            />
-          </div>
-
-          <p style={styles.helperText}>
-            Uploaded files will automatically generate key points. Use the key
-            points button only for notes typed or pasted manually.
-          </p>
-
-          <div style={styles.actionSection}>
-            <p style={styles.actionLabel}>Generate</p>
-
-            <div style={styles.buttonRow}>
-              <button
-                style={styles.button}
-                onClick={() => extractKeyPoints()}
-                disabled={loading !== ""}
-              >
-                Key Points
-              </button>
-
-              <button
-                style={styles.button}
-                onClick={generateFlashcards}
-                disabled={loading !== ""}
-              >
-                Flashcards
-              </button>
-
-              <button
-                style={styles.button}
-                onClick={generateSummary}
-                disabled={loading !== ""}
-              >
-                Summary Sheet
-              </button>
+              {error && (
+                <div className="banner banner-error" role="alert">
+                  <Icon name="alertCircle" size={16} />
+                  <span style={{ flex: 1 }}>{error}</span>
+                  <button
+                    type="button"
+                    className="toast-dismiss"
+                    aria-label="Dismiss error"
+                    onClick={() => setError("")}
+                  >
+                    <Icon name="x" size={14} />
+                  </button>
+                </div>
+              )}
             </div>
+          )}
 
-            <p style={styles.actionLabel}>Storage</p>
+          {/* ---------------- Dashboard ---------------- */}
 
-            <div style={styles.buttonRow}>
-              <button
-                style={styles.secondaryButton}
-                onClick={saveNote}
-                disabled={loading !== ""}
-              >
-                {editingSavedNoteId ? "Update Note" : "Save Note"}
-              </button>
+          {activeTab === "dashboard" && (
+            <>
+              <div className="dashboard-welcome">
+                <h2>
+                  Welcome back{displayName ? `, ${displayName}` : ""}
+                </h2>
+                <p>What would you like to study today?</p>
+              </div>
 
-              <button
-                style={styles.secondaryButton}
-                onClick={fetchSavedNote}
-                disabled={loading !== ""}
-              >
-                View Saved Notes
-              </button>
+              <div className="dashboard-grid">
+                <div className="card stat-card">
+                  <span className="stat-card-icon">
+                    <Icon name="folder" size={19} />
+                  </span>
+                  <div>
+                    <div className="stat-card-value">{subjects.length}</div>
+                    <div className="stat-card-label">
+                      {subjects.length === 1 ? "Subject" : "Subjects"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card stat-card">
+                  <span className="stat-card-icon">
+                    <Icon name="fileText" size={19} />
+                  </span>
+                  <div>
+                    <div className="stat-card-value">{savedNotes.length}</div>
+                    <div className="stat-card-label">
+                      Saved notes{subject ? ` in ${subject}` : " loaded"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card stat-card">
+                  <span className="stat-card-icon accent">
+                    <Icon name="cards" size={19} />
+                  </span>
+                  <div>
+                    <div className="stat-card-value">{flashcards.length}</div>
+                    <div className="stat-card-label">Flashcards ready</div>
+                  </div>
+                </div>
+
+                <div className="card stat-card">
+                  <span className="stat-card-icon accent">
+                    <Icon name="image" size={19} />
+                  </span>
+                  <div>
+                    <div className="stat-card-value">
+                      {selectedPdfPages.length}
+                    </div>
+                    <div className="stat-card-label">Lecture visuals</div>
+                  </div>
+                </div>
+              </div>
+
+              {subjects.length === 0 ? (
+                <section className="dashboard-section">
+                  <div className="card">
+                    <EmptyState
+                      icon="sparkles"
+                      title="Let's set up your study space"
+                      text="Three quick steps: create a subject, upload your lecture notes, then generate key points, flashcards and summaries with AI."
+                    >
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => navigate("upload")}
+                      >
+                        <Icon name="folderPlus" size={16} />
+                        Create your first subject
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => navigate("upload")}
+                      >
+                        <Icon name="upload" size={16} />
+                        Upload notes
+                      </button>
+                    </EmptyState>
+                  </div>
+                </section>
+              ) : (
+                <section className="dashboard-section">
+                  <h3 className="dashboard-section-title">Quick actions</h3>
+
+                  <div className="quick-actions">
+                    <button
+                      type="button"
+                      className="card quick-action"
+                      onClick={() => navigate("upload")}
+                    >
+                      <span className="quick-action-icon">
+                        <Icon name="upload" size={18} />
+                      </span>
+                      <span className="quick-action-title">
+                        Upload new notes
+                        <Icon name="arrowRight" size={15} />
+                      </span>
+                      <span className="quick-action-text">
+                        Paste text or upload PDFs, text files and photos to
+                        start a new study set.
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="card quick-action"
+                      onClick={() => navigate("saved")}
+                    >
+                      <span className="quick-action-icon">
+                        <Icon name="folder" size={18} />
+                      </span>
+                      <span className="quick-action-title">
+                        View saved notes
+                        <Icon name="arrowRight" size={15} />
+                      </span>
+                      <span className="quick-action-text">
+                        Reopen previous study sets with their key points,
+                        flashcards and layouts.
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="card quick-action"
+                      onClick={() => navigate("subjectsummary")}
+                    >
+                      <span className="quick-action-icon">
+                        <Icon name="bookOpen" size={18} />
+                      </span>
+                      <span className="quick-action-title">
+                        Subject summary
+                        <Icon name="arrowRight" size={15} />
+                      </span>
+                      <span className="quick-action-text">
+                        Combine every saved note in a subject into one revision
+                        sheet.
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="card quick-action"
+                      onClick={() => navigate("editor")}
+                    >
+                      <span className="quick-action-icon">
+                        <Icon name="layout" size={18} />
+                      </span>
+                      <span className="quick-action-title">
+                        Cheat Sheet Builder
+                        <Icon name="arrowRight" size={15} />
+                      </span>
+                      <span className="quick-action-text">
+                        Arrange your generated resources on a page and export as
+                        PNG or PDF.
+                      </span>
+                    </button>
+
+                    {hasAnyNoteContent && (
+                      <button
+                        type="button"
+                        className="card quick-action"
+                        onClick={() => navigate("resources")}
+                      >
+                        <span className="quick-action-icon">
+                          <Icon name="sparkles" size={18} />
+                        </span>
+                        <span className="quick-action-title">
+                          Continue current note
+                          <Icon name="arrowRight" size={15} />
+                        </span>
+                        <span className="quick-action-text">
+                          {noteTitle.trim() || "Untitled Note"} —{" "}
+                          {noteResourceCount} of 3 resources generated.
+                        </span>
+                      </button>
+                    )}
+
+                    {flashcards.length > 0 && (
+                      <button
+                        type="button"
+                        className="card quick-action"
+                        onClick={() => setActiveTab("flashcards")}
+                      >
+                        <span className="quick-action-icon">
+                          <Icon name="zap" size={18} />
+                        </span>
+                        <span className="quick-action-title">
+                          Continue studying
+                          <Icon name="arrowRight" size={15} />
+                        </span>
+                        <span className="quick-action-text">
+                          Resume Study Mode — card {currentCard + 1} of{" "}
+                          {flashcards.length}.
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              <section className="dashboard-section">
+                <h3 className="dashboard-section-title">Recent saved notes</h3>
+
+                {filteredSavedNotes.length === 0 ? (
+                  <div className="card">
+                    <EmptyState
+                      icon="folder"
+                      title="No saved notes loaded"
+                      text={
+                        subject
+                          ? `Open Saved Notes to load your ${subject} library.`
+                          : "Select a subject and open Saved Notes to load your library."
+                      }
+                    >
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => navigate("saved")}
+                      >
+                        <Icon name="folder" size={16} />
+                        Open Saved Notes
+                      </button>
+                    </EmptyState>
+                  </div>
+                ) : (
+                  <div className="recent-notes-grid">
+                    {filteredSavedNotes.slice(0, 3).map((note) => (
+                      <button
+                        type="button"
+                        key={note.id}
+                        className="card note-card"
+                        onClick={() => {
+                          setSelectedSavedNote(note);
+                          setSavedNoteTab("original");
+                          setSavedCurrentCard(0);
+                          setSavedShowAnswer(false);
+                          setSavedNoteDraft(null);
+                          setActiveTab("saved");
+                        }}
+                      >
+                        <div className="note-card-top">
+                          <span className="note-card-title">
+                            {note.title || "Untitled Note"}
+                          </span>
+                          {formatNoteDate(note.createdAt) && (
+                            <span className="note-card-date">
+                              <Icon name="clock" size={12} />
+                              {formatNoteDate(note.createdAt)}
+                            </span>
+                          )}
+                        </div>
+
+                        {note.originalText && (
+                          <span className="note-card-preview">
+                            {note.originalText.slice(0, 140)}
+                          </span>
+                        )}
+
+                        <span className="note-card-badges">
+                          {note.keyPoints && (
+                            <span className="badge badge-primary">
+                              Key points
+                            </span>
+                          )}
+                          {Array.isArray(note.flashcards) &&
+                            note.flashcards.length > 0 && (
+                              <span className="badge badge-primary">
+                                {note.flashcards.length} cards
+                              </span>
+                            )}
+                          {note.summary && (
+                            <span className="badge badge-neutral">Summary</span>
+                          )}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </>
+          )}
+
+          {/* ---------------- Upload workspace ---------------- */}
+
+          {activeTab === "upload" && (
+            <div className="workflow">
+              <section className="card workflow-step">
+                <header className="workflow-step-header">
+                  <span className="workflow-step-number">1</span>
+                  <h3 className="workflow-step-title">Select a subject</h3>
+                  <span className="workflow-step-hint">
+                    Notes are organised and saved per subject
+                  </span>
+                </header>
+
+                <div className="workflow-step-body">
+                  <div className="subject-row">
+                    <div className="field">
+                      <label className="field-label" htmlFor="subject-select">
+                        Active subject
+                      </label>
+                      <select
+                        id="subject-select"
+                        className="select"
+                        value={subject}
+                        onChange={(e) => setSubject(e.target.value)}
+                      >
+                        <option value="">Select a subject</option>
+                        {subjects.map((subj) => (
+                          <option key={subj} value={subj}>
+                            {subj}
+                          </option>
+                        ))}
+                      </select>
+                      {subjects.length === 0 && (
+                        <span className="field-hint">
+                          No subjects yet — create your first one on the right.
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="field">
+                      <label className="field-label" htmlFor="subject-new">
+                        Create a new subject
+                      </label>
+                      <div className="subject-create-row">
+                        <input
+                          id="subject-new"
+                          className="input"
+                          placeholder="e.g. CH2101 Thermodynamics"
+                          value={newSubject}
+                          onChange={(e) => setNewSubject(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addSubject();
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={addSubject}
+                          disabled={!newSubject.trim()}
+                        >
+                          <Icon name="plus" size={15} />
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="card workflow-step">
+                <header className="workflow-step-header">
+                  <span className="workflow-step-number">2</span>
+                  <h3 className="workflow-step-title">Name this note</h3>
+                </header>
+
+                <div className="workflow-step-body">
+                  <div className="field">
+                    <label className="field-label" htmlFor="note-title">
+                      Note title
+                    </label>
+                    <input
+                      id="note-title"
+                      className="input"
+                      placeholder="e.g. Lecture 4 — Enzyme Kinetics"
+                      value={noteTitle}
+                      onChange={(e) => setNoteTitle(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </section>
+
+              <section className="card workflow-step">
+                <header className="workflow-step-header">
+                  <span className="workflow-step-number">3</span>
+                  <h3 className="workflow-step-title">Choose an input method</h3>
+                </header>
+
+                <div className="workflow-step-body">
+                  <div className="method-grid">
+                    {INPUT_METHODS.map((method) => (
+                      <button
+                        type="button"
+                        key={method.id}
+                        className={`method-card ${
+                          inputMethod === method.id ? "selected" : ""
+                        }`}
+                        onClick={() => setInputMethod(method.id)}
+                        aria-pressed={inputMethod === method.id}
+                      >
+                        <span className="method-card-icon">
+                          <Icon name={method.icon} size={17} />
+                        </span>
+                        <span className="method-card-name">{method.name}</span>
+                        <span className="method-card-desc">{method.desc}</span>
+                        <span className="method-card-format">
+                          {method.format}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {inputMethod !== "paste" && (
+                    <>
+                      <label
+                        className={`dropzone ${dragOver ? "dragging" : ""}`}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setDragOver(true);
+                        }}
+                        onDragLeave={() => setDragOver(false)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setDragOver(false);
+                          const file = e.dataTransfer.files?.[0];
+                          handleFile(file);
+                        }}
+                      >
+                        <span className="dropzone-icon">
+                          <Icon name="upload" size={20} />
+                        </span>
+                        <span className="dropzone-title">
+                          Drag & drop your file here, or{" "}
+                          <span>browse</span>
+                        </span>
+                        <span className="dropzone-hint">
+                          Supported:{" "}
+                          {INPUT_METHODS.find((m) => m.id === inputMethod)
+                            ?.format || "files"}
+                        </span>
+                        <input
+                          type="file"
+                          className="visually-hidden"
+                          accept={
+                            INPUT_METHODS.find((m) => m.id === inputMethod)
+                              ?.accept || ".txt,.pdf,.png,.jpg,.jpeg"
+                          }
+                          onChange={handleFileUpload}
+                        />
+                      </label>
+
+                      {uploadedFile && (
+                        <div className="dropzone-file">
+                          <Icon name="fileText" size={17} />
+                          <div style={{ minWidth: 0 }}>
+                            <div className="dropzone-file-name">
+                              {uploadedFile.name}
+                            </div>
+                            <div className="dropzone-file-type">
+                              {uploadedFile.type}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => setUploadedFile(null)}
+                          >
+                            <Icon name="x" size={14} />
+                            Clear
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {inputMethod === "paste" && (
+                    <p className="generation-note">
+                      Type or paste your notes into the editor in step 4 below.
+                    </p>
+                  )}
+                </div>
+              </section>
+
+              <section className="card workflow-step">
+                <header className="workflow-step-header">
+                  <span className="workflow-step-number">4</span>
+                  <h3 className="workflow-step-title">
+                    Review & edit your notes
+                  </h3>
+                  <span className="workflow-step-hint">
+                    Clean up OCR or PDF text before generating
+                  </span>
+                </header>
+
+                <div className="workflow-step-body">
+                  <textarea
+                    className="textarea notes-textarea"
+                    placeholder="Paste or type your study notes here…"
+                    aria-label="Study notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                  />
+                  <div className="notes-meta">
+                    <span>
+                      Review and edit before generating — especially text from
+                      OCR image uploads.
+                    </span>
+                    <span>{notes.length.toLocaleString()} characters</span>
+                  </div>
+                </div>
+              </section>
+
+              <section className="card workflow-step">
+                <header className="workflow-step-header">
+                  <span className="workflow-step-number">5</span>
+                  <h3 className="workflow-step-title">
+                    Generate study resources
+                  </h3>
+                </header>
+
+                <div className="workflow-step-body">
+                  <div className="generation-toolbar">
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => extractKeyPoints()}
+                      disabled={loading !== "" || !hasAnyNoteContent}
+                      title={
+                        !hasAnyNoteContent
+                          ? "Add some notes first"
+                          : "Extract the key concepts from your notes"
+                      }
+                    >
+                      <Icon name="sparkles" size={16} />
+                      Key Points
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={generateFlashcards}
+                      disabled={loading !== "" || !hasAnyNoteContent}
+                      title={
+                        !hasAnyNoteContent
+                          ? "Add some notes first"
+                          : "Generate question-and-answer flashcards"
+                      }
+                    >
+                      <Icon name="cards" size={16} />
+                      Flashcards
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={generateSummary}
+                      disabled={loading !== "" || !keyPoints.trim()}
+                      title={
+                        !keyPoints.trim()
+                          ? "Generate key points first — the summary is built from them"
+                          : "Build a concise revision summary"
+                      }
+                    >
+                      <Icon name="fileText" size={16} />
+                      Summary Sheet
+                    </button>
+
+                    <span className="generation-toolbar-spacer" />
+
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={saveNote}
+                      disabled={loading !== ""}
+                    >
+                      <Icon name="save" size={16} />
+                      {editingSavedNoteId ? "Update Note" : "Save Note"}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={fetchSavedNote}
+                      disabled={loading !== ""}
+                    >
+                      <Icon name="folder" size={16} />
+                      View Saved Notes
+                    </button>
+                  </div>
+
+                  <p className="generation-note">
+                    Uploaded PDF files automatically generate key points and
+                    select lecture visuals. Summaries are built from generated
+                    key points.
+                  </p>
+                </div>
+              </section>
             </div>
+          )}
 
-            <p style={styles.actionLabel}>Account</p>
+          {/* ---------------- Study resources ---------------- */}
 
-            <div style={styles.buttonRow}>
-              <button
-                style={styles.logoutButton}
-                onClick={logoutUser}
-                disabled={loading !== ""}
-              >
-                Logout
-              </button>
-            </div>
-          </div>
+          {RESOURCE_TABS.includes(activeTab) && (
+            <>
+              <div className="resource-tabs" role="tablist" aria-label="Study resources">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === "keypoints"}
+                  className={`resource-tab ${
+                    activeTab === "keypoints" ? "active" : ""
+                  }`}
+                  onClick={() => setActiveTab("keypoints")}
+                >
+                  <Icon name="sparkles" size={15} />
+                  Key Points
+                </button>
 
-          {loading && <p style={styles.loading}>{loading}</p>}
-          {error && <p style={styles.error}>{error}</p>}
-        </div>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === "flashcards"}
+                  className={`resource-tab ${
+                    activeTab === "flashcards" ? "active" : ""
+                  }`}
+                  onClick={() => setActiveTab("flashcards")}
+                >
+                  <Icon name="cards" size={15} />
+                  Flashcards
+                </button>
 
-        <div style={styles.card}>
-          <div style={styles.tabRow}>
-            <button
-              style={
-                activeTab === "keypoints" ? styles.activeTab : styles.tabButton
-              }
-              onClick={() => setActiveTab("keypoints")}
-            >
-              Key Points
-            </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === "summary"}
+                  className={`resource-tab ${
+                    activeTab === "summary" ? "active" : ""
+                  }`}
+                  onClick={() => setActiveTab("summary")}
+                >
+                  <Icon name="fileText" size={15} />
+                  Summary Sheet
+                </button>
+              </div>
 
-            <button
-              style={
-                activeTab === "flashcards" ? styles.activeTab : styles.tabButton
-              }
-              onClick={() => setActiveTab("flashcards")}
-            >
-              Flashcards
-            </button>
+              {activeTab === "keypoints" && (
+                <section className="study-resource-sheet">
+                  <header className="study-resource-header">
+                    <div className="resource-header-row">
+                      <div>
+                        <p className="study-resource-label">
+                          AI Revision Resource
+                        </p>
+                        <h2>Key Points</h2>
+                      </div>
 
-            <button
-              style={activeTab === "summary" ? styles.activeTab : styles.tabButton}
-              onClick={() => setActiveTab("summary")}
-            >
-              Summary Sheet
-            </button>
+                      <div className="resource-actions">
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => copyText(keyPoints, "Key points")}
+                          disabled={!keyPoints.trim()}
+                        >
+                          <Icon name="copy" size={14} />
+                          Copy
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => extractKeyPoints()}
+                          disabled={loading !== "" || !hasAnyNoteContent}
+                        >
+                          <Icon name="refresh" size={14} />
+                          Regenerate
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={openCheatSheetBuilder}
+                          disabled={!keyPoints.trim()}
+                        >
+                          <Icon name="layout" size={14} />
+                          Add in Builder
+                        </button>
+                      </div>
+                    </div>
+                    <p>
+                      The most important concepts extracted from your uploaded
+                      notes.
+                    </p>
+                  </header>
 
-            <button
-              style={
-                activeTab === "editor" 
-                  ? styles.activeTab 
-                  : styles.tabButton
-                }
-                onClick={openCheatSheetBuilder}
-            >
-              Cheat Sheet Builder
-            </button>
+                  <div className="study-resource-content">
+                    {loading.startsWith("Extracting") ? (
+                      <ContentSkeleton />
+                    ) : keyPoints ? (
+                      <MarkdownContent content={keyPoints} />
+                    ) : (
+                      <EmptyState
+                        icon="sparkles"
+                        title="No key points yet"
+                        text="Upload or paste your notes, then generate key points to see the core concepts here."
+                      >
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => navigate("upload")}
+                        >
+                          <Icon name="upload" size={16} />
+                          Go to Upload Notes
+                        </button>
+                      </EmptyState>
+                    )}
+                  </div>
+                </section>
+              )}
 
-            <button
-              style={activeTab === "saved" ? styles.activeTab : styles.tabButton}
-              onClick={() => setActiveTab("saved")}
-            >
-              Saved Notes
-            </button>
-          </div>
+              {activeTab === "flashcards" && (
+                <section className="study-resource-sheet">
+                  <header className="study-resource-header">
+                    <div className="resource-header-row">
+                      <div>
+                        <p className="study-resource-label">
+                          Active Recall Resource
+                        </p>
+                        <h2>Flashcards</h2>
+                      </div>
+
+                      <div className="resource-actions">
+                        {flashcards.length > 0 && (
+                          <span className="badge badge-primary">
+                            {flashcards.length}{" "}
+                            {flashcards.length === 1 ? "card" : "cards"}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={generateFlashcards}
+                          disabled={loading !== "" || !hasAnyNoteContent}
+                        >
+                          <Icon name="refresh" size={14} />
+                          Regenerate
+                        </button>
+                      </div>
+                    </div>
+                    <p>
+                      Review one question at a time and reveal the answer when
+                      ready.
+                    </p>
+                  </header>
+
+                  <div className="study-resource-content">
+                    {loading.startsWith("Generating flashcards") ? (
+                      <ContentSkeleton />
+                    ) : flashcards.length === 0 ? (
+                      <EmptyState
+                        icon="cards"
+                        title="No flashcards yet"
+                        text="Generate flashcards from your notes to start an active recall study session."
+                      >
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => navigate("upload")}
+                        >
+                          <Icon name="upload" size={16} />
+                          Go to Upload Notes
+                        </button>
+                      </EmptyState>
+                    ) : (
+                      <div className="flashcard-study">
+                        <div className="flashcard-progress-row">
+                          <span>
+                            Card {currentCard + 1} of {flashcards.length}
+                          </span>
+
+                          <div className="flashcard-progress-track">
+                            <div
+                              className="flashcard-progress-fill"
+                              style={{
+                                width: `${
+                                  ((currentCard + 1) / flashcards.length) * 100
+                                }%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <article className="flashcard-study-card">
+                          <p className="flashcard-section-label">Question</p>
+
+                          <h3 className="flashcard-question">
+                            {flashcards[currentCard].question}
+                          </h3>
+
+                          {showAnswer ? (
+                            <div className="flashcard-answer-panel">
+                              <p className="flashcard-section-label">Answer</p>
+
+                              <p className="flashcard-answer-text">
+                                {flashcards[currentCard].answer}
+                              </p>
+                            </div>
+                          ) : (
+                            <p className="flashcard-hidden-hint">
+                              Try answering before revealing the response.
+                            </p>
+                          )}
+                        </article>
+
+                        <div className="flashcard-study-controls">
+                          <button
+                            className="study-control-button secondary"
+                            disabled={currentCard === 0}
+                            onClick={() => {
+                              setCurrentCard((prev) => Math.max(prev - 1, 0));
+                              setShowAnswer(false);
+                            }}
+                          >
+                            <Icon name="chevronLeft" size={16} />
+                            Previous
+                          </button>
+
+                          <button
+                            className="study-control-button primary"
+                            onClick={() => setShowAnswer((current) => !current)}
+                          >
+                            {showAnswer ? "Hide Answer" : "Show Answer"}
+                          </button>
+
+                          <button
+                            className="study-control-button secondary"
+                            disabled={currentCard === flashcards.length - 1}
+                            onClick={() => {
+                              setCurrentCard((prev) =>
+                                Math.min(prev + 1, flashcards.length - 1)
+                              );
+                              setShowAnswer(false);
+                            }}
+                          >
+                            Next
+                            <Icon name="chevronRight" size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {activeTab === "summary" && (
+                <section className="summary-sheet">
+                  <header className="summary-sheet-header">
+                    <div className="resource-header-row">
+                      <div>
+                        <p className="summary-sheet-label">
+                          AI Revision Resource
+                        </p>
+                        <h2>Summary Sheet</h2>
+                      </div>
+
+                      <div className="resource-actions">
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => copyText(summary, "Summary")}
+                          disabled={!summary.trim()}
+                        >
+                          <Icon name="copy" size={14} />
+                          Copy
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={generateSummary}
+                          disabled={loading !== "" || !keyPoints.trim()}
+                        >
+                          <Icon name="refresh" size={14} />
+                          Regenerate
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={openCheatSheetBuilder}
+                          disabled={!summary.trim()}
+                        >
+                          <Icon name="layout" size={14} />
+                          Add in Builder
+                        </button>
+                      </div>
+                    </div>
+                    <p>
+                      A concise revision guide generated from your extracted key
+                      points.
+                    </p>
+                  </header>
+
+                  <div className="summary-sheet-content">
+                    {loading.startsWith("Building summary") ? (
+                      <ContentSkeleton />
+                    ) : (
+                      <MarkdownContent
+                        content={summary}
+                        emptyMessage="No summary sheet generated yet. Generate key points first, then build the summary."
+                      />
+                    )}
+                  </div>
+
+                  {selectedPdfPages.length > 0 && (
+                    <section className="lecture-visuals-section">
+                      <div className="lecture-visuals-header">
+                        <div>
+                          <p className="summary-sheet-label">
+                            From your uploaded notes
+                          </p>
+                          <h3>Important Lecture Visuals</h3>
+                        </div>
+
+                        <span className="visual-count">
+                          {selectedPdfPages.length} selected
+                        </span>
+                      </div>
+
+                      <div className="lecture-visuals">
+                        {selectedPdfPages.map((pageNumber) => {
+                          const page = pdfPages.find(
+                            (item) => item.pageNumber === pageNumber
+                          );
+
+                          if (!page) return null;
+
+                          return (
+                            <figure key={page.pageNumber} className="lecture-page">
+                              <div className="lecture-page-heading">
+                                <span>Lecture visual</span>
+                                <strong>Page {page.pageNumber}</strong>
+                              </div>
+
+                              <img
+                                src={page.imageUrl}
+                                alt={`Important lecture visual from page ${page.pageNumber}`}
+                              />
+
+                              <figcaption>
+                                Automatically selected as a useful revision
+                                visual.
+                              </figcaption>
+                            </figure>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  )}
+                </section>
+              )}
+            </>
+          )}
+
+          {/* ---------------- Cheat Sheet Builder ---------------- */}
 
           {activeTab === "editor" && (
-            <section className="cheat-sheet-builder study-resource-sheet">
-  <header className="study-resource-header builder-header">
-    <p className="study-resource-label">
-      Custom Revision Workspace
-    </p>
+            <section className="card cheat-sheet-builder study-resource-sheet">
+              <header className="study-resource-header builder-header">
+                <p className="study-resource-label">
+                  Custom Revision Workspace
+                </p>
 
-    <h2>Cheat Sheet Builder</h2>
+                <h2>Cheat Sheet Builder</h2>
 
-    <p>
-      Create a personalised revision sheet by adding and arranging
-      concepts, flashcards and lecture visuals.
-    </p>
-  </header>
+                <p>
+                  Create a personalised revision sheet by adding and arranging
+                  concepts, flashcards and lecture visuals.
+                </p>
+              </header>
 
-  <div className="builder-status-row">
-    <span
-      className={
-        layoutDirty
-          ? "builder-status-badge unsaved"
-          : "builder-status-badge saved"
-      }
-    >
-      {layoutDirty ? "● Unsaved changes" : "✓ Saved"}
-    </span>
-  </div>
+              <div className="builder-status-row">
+                <span
+                  className={
+                    layoutDirty
+                      ? "builder-status-badge unsaved"
+                      : "builder-status-badge saved"
+                  }
+                >
+                  {layoutDirty ? (
+                    <>
+                      <Icon name="clock" size={13} />
+                      Unsaved changes
+                    </>
+                  ) : (
+                    <>
+                      <Icon name="check" size={13} />
+                      Saved
+                    </>
+                  )}
+                </span>
+
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={saveNote}
+                  disabled={loading !== ""}
+                >
+                  <Icon name="save" size={14} />
+                  {editingSavedNoteId ? "Update note" : "Save note"}
+                </button>
+              </div>
 
               <div className="builder-source-panel">
                 <div className="builder-source-tabs">
@@ -1645,1160 +2813,881 @@ const addAllSectionsToEditor = (content) => {
                     emptyMessage="Generate a summary before adding it."
                     onAdd={addResourceSectionToEditor}
                     onAddAll={() => addAllSectionsToEditor(summary)}
-                 />
+                  />
                 )}
 
-                  {editorSource === "original" && (
-                    <ResourceSectionPicker
-                      content={notes}
-                      emptyMessage="No original notes are available."
-                      onAdd={addResourceSectionToEditor}
-                      onAddAll={() => addAllSectionsToEditor(notes)}
-                    />
-                  )}
+                {editorSource === "original" && (
+                  <ResourceSectionPicker
+                    content={notes}
+                    emptyMessage="No original notes are available."
+                    onAdd={addResourceSectionToEditor}
+                    onAddAll={() => addAllSectionsToEditor(notes)}
+                  />
+                )}
 
-                  {editorSource === "flashcards" && (
-                    <div className="builder-resource-grid">
-                      {flashcards.length === 0 ? (
-                        <p className="empty-resource-message">
-                          Generate flashcards before adding them.
-                        </p>
-                     ) : (
-                        flashcards.map((card, index) => (
+                {editorSource === "flashcards" && (
+                  <div className="builder-resource-grid">
+                    {flashcards.length === 0 ? (
+                      <p className="empty-resource-message">
+                        Generate flashcards before adding them.
+                      </p>
+                    ) : (
+                      flashcards.map((card, index) => (
+                        <article
+                          key={`${card.question}-${index}`}
+                          className="builder-resource-item"
+                        >
+                          <p className="builder-resource-label">
+                            Flashcard {index + 1}
+                          </p>
+
+                          <h4>{card.question}</h4>
+                          <p>{card.answer}</p>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              addFlashcardToEditor(card, index)
+                            }
+                          >
+                            Add to canvas
+                          </button>
+                        </article>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {editorSource === "visuals" && (
+                  <div className="builder-resource-grid">
+                    {selectedPdfPages.length === 0 ? (
+                      <p className="empty-resource-message">
+                        No lecture visuals are currently available.
+                      </p>
+                    ) : (
+                      selectedPdfPages.map((pageNumber, index) => {
+                        const page = pdfPages.find(
+                          (item) => item.pageNumber === pageNumber
+                        );
+
+                        if (!page) {
+                          return null;
+                        }
+
+                        return (
                           <article
-                            key={`${card.question}-${index}`}
-                            className="builder-resource-item"
+                            key={page.pageNumber}
+                            className="builder-resource-item builder-visual-item"
                           >
                             <p className="builder-resource-label">
-                              Flashcard {index + 1}
+                              Page {page.pageNumber}
                             </p>
 
-                            <h4>{card.question}</h4>
-                            <p>{card.answer}</p>
+                            <img
+                              className="builder-visual-preview"
+                              src={page.imageUrl}
+                              alt={`Lecture page ${page.pageNumber}`}
+                            />
 
                             <button
                               type="button"
                               onClick={() =>
-                                addFlashcardToEditor(card, index)
+                                addVisualToEditor(page, index)
                               }
                             >
                               Add to canvas
                             </button>
                           </article>
-                        ))
-                      )}
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <CheatSheetEditor
+                ref={editorRef}
+                initialPages={cheatSheetLayout}
+                onChange={(layout) => {
+                  setCheatSheetLayout(layout);
+                  setLayoutDirty(true);
+                }}
+                exportFileName={
+                  noteTitle || "stitch-cheat-sheet"
+                }
+              />
+            </section>
+          )}
+
+          {/* ---------------- Saved notes ---------------- */}
+
+          {activeTab === "saved" && (
+            <>
+              {!subject.trim() ? (
+                <div className="card">
+                  <EmptyState
+                    icon="folder"
+                    title="Select a subject first"
+                    text="Saved notes are organised per subject. Choose or create a subject in the upload workspace, then come back to load its library."
+                  >
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => navigate("upload")}
+                    >
+                      <Icon name="folderPlus" size={16} />
+                      Choose a subject
+                    </button>
+                  </EmptyState>
+                </div>
+              ) : savedNotes.length === 0 ? (
+                <div className="card">
+                  <EmptyState
+                    icon="folder"
+                    title={`No saved notes in ${subject}`}
+                    text="Once you save a note, it will appear here with all of its generated study resources."
+                  >
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => navigate("upload")}
+                    >
+                      <Icon name="upload" size={16} />
+                      Upload notes
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={fetchSavedNote}
+                      disabled={loading !== ""}
+                    >
+                      <Icon name="refresh" size={16} />
+                      Refresh
+                    </button>
+                  </EmptyState>
+                </div>
+              ) : (
+                <>
+                  <div className="saved-notes-toolbar">
+                    <div className="saved-notes-search">
+                      <Icon name="search" size={15} />
+                      <input
+                        type="search"
+                        className="input"
+                        placeholder="Search saved notes…"
+                        aria-label="Search saved notes"
+                        value={savedNoteSearch}
+                        onChange={(event) =>
+                          setSavedNoteSearch(event.target.value)
+                        }
+                      />
+                    </div>
+
+                    <select
+                      className="select"
+                      aria-label="Sort saved notes"
+                      value={savedNoteSort}
+                      onChange={(event) => setSavedNoteSort(event.target.value)}
+                    >
+                      <option value="newest">Newest first</option>
+                      <option value="oldest">Oldest first</option>
+                      <option value="title">Title A–Z</option>
+                    </select>
+
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={fetchSavedNote}
+                      disabled={loading !== ""}
+                    >
+                      <Icon name="refresh" size={15} />
+                      Refresh
+                    </button>
+                  </div>
+
+                  {filteredSavedNotes.length === 0 ? (
+                    <div className="card">
+                      <EmptyState
+                        icon="search"
+                        title="No matches"
+                        text="No saved notes match your search."
+                      />
+                    </div>
+                  ) : (
+                    <div className="saved-notes-grid">
+                      {filteredSavedNotes.map((note, index) => (
+                        <button
+                          type="button"
+                          key={note.id}
+                          className={`card note-card ${
+                            selectedSavedNote?.id === note.id ? "selected" : ""
+                          }`}
+                          onClick={() => {
+                            setSelectedSavedNote(note);
+                            setSavedNoteTab("original");
+                            setSavedCurrentCard(0);
+                            setSavedShowAnswer(false);
+                            setSavedNoteDraft(null);
+                          }}
+                        >
+                          <div className="note-card-top">
+                            <span className="note-card-title">
+                              {note.title || `Note ${index + 1}`}
+                            </span>
+                            {formatNoteDate(note.createdAt) && (
+                              <span className="note-card-date">
+                                <Icon name="clock" size={12} />
+                                {formatNoteDate(note.createdAt)}
+                              </span>
+                            )}
+                          </div>
+
+                          {note.originalText && (
+                            <span className="note-card-preview">
+                              {note.originalText.slice(0, 140)}
+                            </span>
+                          )}
+
+                          <span className="note-card-badges">
+                            {note.keyPoints && (
+                              <span className="badge badge-primary">
+                                Key points
+                              </span>
+                            )}
+                            {Array.isArray(note.flashcards) &&
+                              note.flashcards.length > 0 && (
+                                <span className="badge badge-primary">
+                                  {note.flashcards.length} cards
+                                </span>
+                              )}
+                            {note.summary && (
+                              <span className="badge badge-neutral">
+                                Summary
+                              </span>
+                            )}
+                            {Array.isArray(note.lectureVisuals) &&
+                              note.lectureVisuals.length > 0 && (
+                                <span className="badge badge-neutral">
+                                  {note.lectureVisuals.length} visuals
+                                </span>
+                              )}
+                          </span>
+                        </button>
+                      ))}
                     </div>
                   )}
 
-                  {editorSource === "visuals" && (
-                    <div className="builder-resource-grid">
-                      {selectedPdfPages.length === 0 ? (
-                        <p className="empty-resource-message">
-                          No lecture visuals are currently available.
-                        </p>
-                  ) : (
-                    selectedPdfPages.map((pageNumber, index) => {
-                      const page = pdfPages.find(
-                        (item) => item.pageNumber === pageNumber
-                      );
+                  {selectedSavedNote && (
+                    <div className="saved-note-detail">
+                      <div className="saved-note-detail-header">
+                        <h3>{selectedSavedNote.title || "Untitled Note"}</h3>
 
-                      if (!page) {
-                        return null;
-                      }
+                        <div className="saved-note-detail-actions">
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={() =>
+                              openSavedNoteInBuilder(selectedSavedNote)
+                            }
+                          >
+                            <Icon name="layout" size={16} />
+                            Open in Builder
+                          </button>
 
-                      return (
-                        <article
-  key={page.pageNumber}
-  className="builder-resource-item builder-visual-item"
->
-                        <p className="builder-resource-label">
-                          Page {page.pageNumber}
-                        </p>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() =>
+                              beginEditingSavedNote(selectedSavedNote)
+                            }
+                          >
+                            <Icon name="edit" size={16} />
+                            Edit Content
+                          </button>
 
-                        <img
-                          className="builder-visual-preview"
-                          src={page.imageUrl}
-                          alt={`Lecture page ${page.pageNumber}`}
-                        />
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => exportNoteAsPDF(selectedSavedNote)}
+                          >
+                            <Icon name="download" size={16} />
+                            Export PDF
+                          </button>
+
+                          <button
+                            type="button"
+                            className="btn btn-danger-outline"
+                            onClick={() =>
+                              requestDeleteSavedNote(selectedSavedNote)
+                            }
+                          >
+                            <Icon name="trash" size={16} />
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+
+                      {savedNoteDraft && (
+                        <section className="saved-note-edit-panel">
+                          <h3>Edit saved note</h3>
+
+                          <div className="field">
+                            <label
+                              className="field-label"
+                              htmlFor="draft-title"
+                            >
+                              Title
+                            </label>
+                            <input
+                              id="draft-title"
+                              className="input"
+                              value={savedNoteDraft.title}
+                              onChange={(event) =>
+                                setSavedNoteDraft((current) => ({
+                                  ...current,
+                                  title: event.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+
+                          <div className="field">
+                            <label
+                              className="field-label"
+                              htmlFor="draft-original"
+                            >
+                              Original notes
+                            </label>
+                            <textarea
+                              id="draft-original"
+                              className="textarea"
+                              value={savedNoteDraft.originalText}
+                              onChange={(event) =>
+                                setSavedNoteDraft((current) => ({
+                                  ...current,
+                                  originalText: event.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+
+                          <div className="field">
+                            <label
+                              className="field-label"
+                              htmlFor="draft-keypoints"
+                            >
+                              Key points
+                            </label>
+                            <textarea
+                              id="draft-keypoints"
+                              className="textarea"
+                              value={savedNoteDraft.keyPoints}
+                              onChange={(event) =>
+                                setSavedNoteDraft((current) => ({
+                                  ...current,
+                                  keyPoints: event.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+
+                          <div className="field">
+                            <label
+                              className="field-label"
+                              htmlFor="draft-summary"
+                            >
+                              Summary
+                            </label>
+                            <textarea
+                              id="draft-summary"
+                              className="textarea"
+                              value={savedNoteDraft.summary}
+                              onChange={(event) =>
+                                setSavedNoteDraft((current) => ({
+                                  ...current,
+                                  summary: event.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+
+                          <div className="saved-note-edit-actions">
+                            <button
+                              type="button"
+                              className="btn btn-primary"
+                              onClick={updateSavedNoteContent}
+                              disabled={loading !== ""}
+                            >
+                              <Icon name="check" size={16} />
+                              Save Changes
+                            </button>
+
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              onClick={() => setSavedNoteDraft(null)}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </section>
+                      )}
+
+                      <div
+                        className="resource-tabs"
+                        role="tablist"
+                        aria-label="Saved note resources"
+                      >
+                        <button
+                          type="button"
+                          role="tab"
+                          aria-selected={savedNoteTab === "original"}
+                          className={`resource-tab ${
+                            savedNoteTab === "original" ? "active" : ""
+                          }`}
+                          onClick={() => setSavedNoteTab("original")}
+                        >
+                          Original Text
+                        </button>
 
                         <button
                           type="button"
-                          onClick={() =>
-                            addVisualToEditor(page, index)
-                          }
+                          role="tab"
+                          aria-selected={savedNoteTab === "keypoints"}
+                          className={`resource-tab ${
+                            savedNoteTab === "keypoints" ? "active" : ""
+                          }`}
+                          onClick={() => setSavedNoteTab("keypoints")}
                         >
-                          Add to canvas
+                          Key Points
                         </button>
-                      </article>
-                    );
-                  })
-                )}
-              </div>
-            )}
-         </div>
 
-         <CheatSheetEditor
-            ref={editorRef}
-            initialPages={cheatSheetLayout}
-            onChange={(layout) => {
-              setCheatSheetLayout(layout);
-              setLayoutDirty(true);
-            }}
-            exportFileName={
-              noteTitle || "stitch-cheat-sheet"
-            }
-          />
-        </section>
-      )}
+                        <button
+                          type="button"
+                          role="tab"
+                          aria-selected={savedNoteTab === "flashcards"}
+                          className={`resource-tab ${
+                            savedNoteTab === "flashcards" ? "active" : ""
+                          }`}
+                          onClick={() => setSavedNoteTab("flashcards")}
+                        >
+                          Flashcards
+                        </button>
 
-          {activeTab === "keypoints" && (
-  <section className="study-resource-sheet">
-    <header className="study-resource-header">
-      <p className="study-resource-label">AI Revision Resource</p>
-      <h2>Key Points</h2>
-      <p>
-        The most important concepts extracted from your uploaded notes.
-      </p>
-    </header>
+                        <button
+                          type="button"
+                          role="tab"
+                          aria-selected={savedNoteTab === "summary"}
+                          className={`resource-tab ${
+                            savedNoteTab === "summary" ? "active" : ""
+                          }`}
+                          onClick={() => setSavedNoteTab("summary")}
+                        >
+                          Summary
+                        </button>
+                      </div>
 
-    <div className="study-resource-content">
-      {keyPoints ? (
-        <MarkdownContent content={keyPoints} />
-      ) : (
-        <p className="empty-resource-message">
-          No key points generated yet.
-        </p>
-      )}
-    </div>
-  </section>
-)}
+                      {savedNoteTab === "original" && (
+                        <section className="study-resource-sheet">
+                          <header className="study-resource-header">
+                            <p className="study-resource-label">
+                              Saved Source Material
+                            </p>
 
-          {activeTab === "flashcards" && (
-  <section className="study-resource-sheet">
-    <header className="study-resource-header">
-      <p className="study-resource-label">Active Recall Resource</p>
-      <h2>Flashcards</h2>
-      <p>
-        Review one question at a time and reveal the answer when ready.
-      </p>
-    </header>
+                            <h2>Original Notes</h2>
 
-    <div className="study-resource-content">
-      {flashcards.length === 0 ? (
-        <p className="empty-resource-message">
-          No flashcards generated yet.
-        </p>
-      ) : (
-        <div className="flashcard-study">
-          <div className="flashcard-progress-row">
-            <span>
-              Card {currentCard + 1} of {flashcards.length}
-            </span>
+                            <p>
+                              The original text used to generate this note's
+                              study resources.
+                            </p>
+                          </header>
 
-            <div className="flashcard-progress-track">
-              <div
-                className="flashcard-progress-fill"
-                style={{
-                  width: `${
-                    ((currentCard + 1) / flashcards.length) * 100
-                  }%`,
-                }}
-              />
-            </div>
-          </div>
+                          <div className="study-resource-content">
+                            {selectedSavedNote.originalText ? (
+                              <div className="original-note-content">
+                                {selectedSavedNote.originalText}
+                              </div>
+                            ) : (
+                              <p className="empty-resource-message">
+                                No original text saved.
+                              </p>
+                            )}
+                          </div>
+                        </section>
+                      )}
 
-          <article className="flashcard-study-card">
-            <p className="flashcard-section-label">Question</p>
+                      {savedNoteTab === "keypoints" && (
+                        <section className="study-resource-sheet">
+                          <header className="study-resource-header">
+                            <p className="study-resource-label">
+                              AI Revision Resource
+                            </p>
+                            <h2>Key Points</h2>
+                            <p>
+                              The most important concepts extracted from this
+                              saved note.
+                            </p>
+                          </header>
 
-            <h3 className="flashcard-question">
-              {flashcards[currentCard].question}
-            </h3>
+                          <div className="study-resource-content">
+                            <MarkdownContent
+                              content={selectedSavedNote.keyPoints}
+                              emptyMessage="No key points saved."
+                            />
+                          </div>
+                        </section>
+                      )}
 
-            {showAnswer ? (
-              <div className="flashcard-answer-panel">
-                <p className="flashcard-section-label">Answer</p>
+                      {savedNoteTab === "summary" && (
+                        <section className="summary-sheet">
+                          <header className="summary-sheet-header">
+                            <p className="summary-sheet-label">
+                              AI Revision Resource
+                            </p>
+                            <h2>Summary Sheet</h2>
+                            <p>
+                              A concise revision guide generated from this saved
+                              note.
+                            </p>
+                          </header>
 
-                <p className="flashcard-answer-text">
-                  {flashcards[currentCard].answer}
-                </p>
-              </div>
-            ) : (
-              <p className="flashcard-hidden-hint">
-                Try answering before revealing the response.
-              </p>
-            )}
-          </article>
+                          <div className="summary-sheet-content">
+                            <MarkdownContent
+                              content={selectedSavedNote.summary}
+                              emptyMessage="No summary saved."
+                            />
+                          </div>
 
-          <div className="flashcard-study-controls">
-            <button
-              className="study-control-button secondary"
-              disabled={currentCard === 0}
-              onClick={() => {
-                setCurrentCard((prev) => Math.max(prev - 1, 0));
-                setShowAnswer(false);
-              }}
-            >
-              Previous
-            </button>
+                          {Array.isArray(selectedSavedNote.lectureVisuals) &&
+                            selectedSavedNote.lectureVisuals.length > 0 && (
+                              <section className="lecture-visuals-section">
+                                <div className="lecture-visuals-header">
+                                  <div>
+                                    <p className="summary-sheet-label">
+                                      From your uploaded notes
+                                    </p>
 
-            <button
-              className="study-control-button primary"
-              onClick={() => setShowAnswer((current) => !current)}
-            >
-              {showAnswer ? "Hide Answer" : "Show Answer"}
-            </button>
+                                    <h3>Important Lecture Visuals</h3>
+                                  </div>
 
-            <button
-              className="study-control-button secondary"
-              disabled={currentCard === flashcards.length - 1}
-              onClick={() => {
-                setCurrentCard((prev) =>
-                  Math.min(prev + 1, flashcards.length - 1)
-                );
-                setShowAnswer(false);
-              }}
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  </section>
-)}
+                                  <span className="visual-count">
+                                    {selectedSavedNote.lectureVisuals.length}{" "}
+                                    selected
+                                  </span>
+                                </div>
 
-          {activeTab === "summary" && (
-  <section className="summary-sheet">
-    <header className="summary-sheet-header">
-      <p className="summary-sheet-label">AI Revision Resource</p>
-      <h2>Summary Sheet</h2>
-      <p>
-        A concise revision guide generated from your extracted key points.
-      </p>
-    </header>
+                                <div className="lecture-visuals">
+                                  {selectedSavedNote.lectureVisuals.map(
+                                    (visual) => (
+                                      <figure
+                                        key={visual.pageNumber}
+                                        className="lecture-page"
+                                      >
+                                        <div className="lecture-page-heading">
+                                          <span>Lecture visual</span>
+                                          <strong>
+                                            Page {visual.pageNumber}
+                                          </strong>
+                                        </div>
 
-    <div className="summary-sheet-content">
-      <MarkdownContent
-        content={summary}
-        emptyMessage="No summary sheet generated yet."
-      />
-    </div>
+                                        <img
+                                          src={visual.imageUrl}
+                                          alt={`Important lecture visual from page ${visual.pageNumber}`}
+                                        />
 
-    {selectedPdfPages.length > 0 && (
-      <section className="lecture-visuals-section">
-        <div className="lecture-visuals-header">
-          <div>
-            <p className="summary-sheet-label">From your uploaded notes</p>
-            <h3>Important Lecture Visuals</h3>
-          </div>
+                                        <figcaption>
+                                          Automatically selected as a useful
+                                          revision visual.
+                                        </figcaption>
+                                      </figure>
+                                    )
+                                  )}
+                                </div>
+                              </section>
+                            )}
+                        </section>
+                      )}
 
-          <span className="visual-count">
-            {selectedPdfPages.length} selected
-          </span>
-        </div>
+                      {savedNoteTab === "flashcards" && (
+                        <section className="study-resource-sheet">
+                          <header className="study-resource-header">
+                            <p className="study-resource-label">
+                              Active Recall Resource
+                            </p>
+                            <h2>Flashcards</h2>
+                            <p>
+                              Review one question at a time and reveal the
+                              answer when ready.
+                            </p>
+                          </header>
 
-        <div className="lecture-visuals">
-          {selectedPdfPages.map((pageNumber) => {
-            const page = pdfPages.find(
-              (item) => item.pageNumber === pageNumber
-            );
+                          <div className="study-resource-content">
+                            {!Array.isArray(selectedSavedNote.flashcards) ||
+                            selectedSavedNote.flashcards.length === 0 ? (
+                              <p className="empty-resource-message">
+                                No flashcards saved.
+                              </p>
+                            ) : (
+                              <div className="flashcard-study">
+                                <div className="flashcard-progress-row">
+                                  <span>
+                                    Card {savedCurrentCard + 1} of{" "}
+                                    {selectedSavedNote.flashcards.length}
+                                  </span>
 
-            if (!page) return null;
+                                  <div className="flashcard-progress-track">
+                                    <div
+                                      className="flashcard-progress-fill"
+                                      style={{
+                                        width: `${
+                                          ((savedCurrentCard + 1) /
+                                            selectedSavedNote.flashcards
+                                              .length) *
+                                          100
+                                        }%`,
+                                      }}
+                                    />
+                                  </div>
+                                </div>
 
-            return (
-              <figure key={page.pageNumber} className="lecture-page">
-                <div className="lecture-page-heading">
-                  <span>Lecture visual</span>
-                  <strong>Page {page.pageNumber}</strong>
-                </div>
+                                <article className="flashcard-study-card">
+                                  <p className="flashcard-section-label">
+                                    Question
+                                  </p>
 
-                <img
-                  src={page.imageUrl}
-                  alt={`Important lecture visual from page ${page.pageNumber}`}
-                />
+                                  <h3 className="flashcard-question">
+                                    {
+                                      selectedSavedNote.flashcards[
+                                        savedCurrentCard
+                                      ].question
+                                    }
+                                  </h3>
 
-                <figcaption>
-                  Automatically selected as a useful revision visual.
-                </figcaption>
-              </figure>
-            );
-          })}
-        </div>
-      </section>
-    )}
-  </section>
-)}
+                                  {savedShowAnswer ? (
+                                    <div className="flashcard-answer-panel">
+                                      <p className="flashcard-section-label">
+                                        Answer
+                                      </p>
 
-          {activeTab === "saved" && (
-  <>
-    <h2 style={styles.heading}>Saved Notes</h2>
+                                      <p className="flashcard-answer-text">
+                                        {
+                                          selectedSavedNote.flashcards[
+                                            savedCurrentCard
+                                          ].answer
+                                        }
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <p className="flashcard-hidden-hint">
+                                      Try answering before revealing the
+                                      response.
+                                    </p>
+                                  )}
+                                </article>
 
-    {savedNotes.length === 0 ? (
-      <div style={styles.output}>No saved notes loaded yet.</div>
-    ) : (
-      <>
-        <div className="saved-notes-toolbar">
-          <input
-            type="search"
-            placeholder="Search saved notes..."
-            value={savedNoteSearch}
-            onChange={(event) => setSavedNoteSearch(event.target.value)}
-          />
+                                <div className="flashcard-study-controls">
+                                  <button
+                                    className="study-control-button secondary"
+                                    disabled={savedCurrentCard === 0}
+                                    onClick={() => {
+                                      setSavedCurrentCard((prev) =>
+                                        Math.max(prev - 1, 0)
+                                      );
+                                      setSavedShowAnswer(false);
+                                    }}
+                                  >
+                                    <Icon name="chevronLeft" size={16} />
+                                    Previous
+                                  </button>
 
-          <select
-            value={savedNoteSort}
-            onChange={(event) => setSavedNoteSort(event.target.value)}
-          >
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-            <option value="title">Title A–Z</option>
-          </select>
-        </div>
+                                  <button
+                                    className="study-control-button primary"
+                                    onClick={() =>
+                                      setSavedShowAnswer((current) => !current)
+                                    }
+                                  >
+                                    {savedShowAnswer
+                                      ? "Hide Answer"
+                                      : "Show Answer"}
+                                  </button>
 
-        {filteredSavedNotes.length === 0 && (
-          <p className="empty-resource-message">
-            No saved notes match your search.
-          </p>
-        )}
+                                  <button
+                                    className="study-control-button secondary"
+                                    disabled={
+                                      savedCurrentCard ===
+                                      selectedSavedNote.flashcards.length - 1
+                                    }
+                                    onClick={() => {
+                                      setSavedCurrentCard((prev) =>
+                                        Math.min(
+                                          prev + 1,
+                                          selectedSavedNote.flashcards.length -
+                                            1
+                                        )
+                                      );
+                                      setSavedShowAnswer(false);
+                                    }}
+                                  >
+                                    Next
+                                    <Icon name="chevronRight" size={16} />
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </section>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
 
-        <div style={styles.savedNotesTabs}>
-          {filteredSavedNotes.map((note, index) => (
-            <button
-              key={note.id}
-              style={
-                selectedSavedNote?.id === note.id
-                  ? styles.activeNoteTab
-                  : styles.noteTab
-              }
-              onClick={() => {
-  setSelectedSavedNote(note);
-  setSavedNoteTab("original");
-  setSavedCurrentCard(0);
-  setSavedShowAnswer(false);
-  setSavedNoteDraft(null);
-}}
-            >
-              {note.title || `Note ${index + 1}`}
-            </button>
-          ))}
-        </div>
+          {/* ---------------- Subject summary ---------------- */}
 
-        <div className="subject-summary-actions">
-          <button
-            style={styles.button}
-            onClick={generateSubjectSummary}
-            disabled={loading}
-          >
-            Generate Subject Summary
-          </button>
-
-          <button
-            style={styles.secondaryButton}
-            onClick={saveSubjectSummary}
-            disabled={loading || !subjectSummary.trim()}
-          >
-            Save Subject Summary
-          </button>
-
-          <button
-            style={styles.secondaryButton}
-            onClick={exportSubjectSummaryAsPDF}
-            disabled={!subjectSummary.trim()}
-          >
-            Export Subject Summary
-          </button>
-        </div>
-
-        {subjectSummary && (
-  <section className="summary-sheet subject-summary-sheet">
-    <header className="summary-sheet-header">
-      <p className="summary-sheet-label">
-        Consolidated Revision Resource
-      </p>
-
-      <h2>{subject || "Subject"} Summary Sheet</h2>
-
-      <p>
-        A combined revision guide generated from all saved notes in this
-        subject.
-      </p>
-    </header>
-
-    <div className="summary-sheet-content">
-      <MarkdownContent
-        content={subjectSummary}
-        emptyMessage="No subject summary generated yet."
-      />
-
-      <label className="subject-summary-editor-label">
-        Edit subject summary
-        <textarea
-          className="subject-summary-editor"
-          value={subjectSummary}
-          onChange={(event) => setSubjectSummary(event.target.value)}
-        />
-      </label>
-    </div>
-  </section>
-)}
-
-        {selectedSavedNote && (
-          <div style={styles.savedNoteCard}>
-            <div style={styles.savedNoteHeader}>
-              <h3>{selectedSavedNote.title || "Untitled Note"}</h3>
-              <div style={{ display: "flex", gap: "10px" }}>
-                <button
-                  style={styles.button}
-                  onClick={() => openSavedNoteInBuilder(selectedSavedNote)}
-                >
-                  Open in Builder
-                </button>
-
-                <button
-                  style={styles.secondaryButton}
-                  onClick={() => beginEditingSavedNote(selectedSavedNote)}
-                >
-                  Edit Content
-                </button>
-
-                <button
-                  style={styles.secondaryButton}
-                  onClick={() => exportNoteAsPDF(selectedSavedNote)}
-                >
-                  Export Note
-                </button>
-              <button
-                style={styles.deleteButton}
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      "Are you sure you want to permanently delete this note?"
-                    )
-                  ) {
-                    deleteSavedNote(selectedSavedNote.id);
-                  }
-                }}
-              >
-                Delete Note
-              </button>
-            </div>
-          </div>
-
-            {savedNoteDraft && (
-              <section className="saved-note-edit-panel">
-                <h3>Edit saved note</h3>
-
-                <label>
-                  Title
-                  <input
-                    value={savedNoteDraft.title}
-                    onChange={(event) =>
-                      setSavedNoteDraft((current) => ({
-                        ...current,
-                        title: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-
-                <label>
-                  Original notes
-                  <textarea
-                    value={savedNoteDraft.originalText}
-                    onChange={(event) =>
-                      setSavedNoteDraft((current) => ({
-                        ...current,
-                        originalText: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-
-                <label>
-                  Key points
-                  <textarea
-                    value={savedNoteDraft.keyPoints}
-                    onChange={(event) =>
-                      setSavedNoteDraft((current) => ({
-                        ...current,
-                        keyPoints: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-
-                <label>
-                  Summary
-                  <textarea
-                    value={savedNoteDraft.summary}
-                    onChange={(event) =>
-                      setSavedNoteDraft((current) => ({
-                        ...current,
-                        summary: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-
-                <div className="saved-note-edit-actions">
-                  <button
-                    style={styles.button}
-                    onClick={updateSavedNoteContent}
-                    disabled={loading}
+          {activeTab === "subjectsummary" && (
+            <>
+              {!subject.trim() ? (
+                <div className="card">
+                  <EmptyState
+                    icon="bookOpen"
+                    title="Select a subject first"
+                    text="The subject summary combines the key points from every saved note in a subject into one consolidated revision sheet."
                   >
-                    Save Changes
-                  </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => navigate("upload")}
+                    >
+                      <Icon name="folderPlus" size={16} />
+                      Choose a subject
+                    </button>
+                  </EmptyState>
+                </div>
+              ) : (
+                <section className="summary-sheet subject-summary-sheet">
+                  <header className="summary-sheet-header">
+                    <div className="resource-header-row">
+                      <div>
+                        <p className="summary-sheet-label">
+                          Consolidated Revision Resource
+                        </p>
 
-                  <button
-                    style={styles.secondaryButton}
-                    onClick={() => setSavedNoteDraft(null)}
+                        <h2>{subject} Summary Sheet</h2>
+                      </div>
+
+                      <div className="resource-actions">
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() =>
+                            copyText(subjectSummary, "Subject summary")
+                          }
+                          disabled={!subjectSummary.trim()}
+                        >
+                          <Icon name="copy" size={14} />
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+
+                    <p>
+                      A combined revision guide generated from the key points of
+                      every saved note in this subject.
+                    </p>
+                  </header>
+
+                  <div className="subject-summary-actions">
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={generateSubjectSummary}
+                      disabled={loading !== ""}
+                    >
+                      <Icon name="sparkles" size={16} />
+                      {subjectSummary.trim() ? "Regenerate" : "Generate"} Summary
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={saveSubjectSummary}
+                      disabled={loading !== "" || !subjectSummary.trim()}
+                    >
+                      <Icon name="save" size={16} />
+                      Save
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={exportSubjectSummaryAsPDF}
+                      disabled={!subjectSummary.trim()}
+                    >
+                      <Icon name="download" size={16} />
+                      Export PDF
+                    </button>
+                  </div>
+
+                  <div
+                    className="summary-sheet-content"
+                    style={{ marginTop: "20px" }}
                   >
-                    Cancel
-                  </button>
-                </div>
-              </section>
-            )}
+                    {loading.startsWith("Generating subject summary") ? (
+                      <ContentSkeleton />
+                    ) : subjectSummary ? (
+                      <>
+                        <MarkdownContent
+                          content={subjectSummary}
+                          emptyMessage="No subject summary generated yet."
+                        />
 
-            <div style={styles.tabRow}>
-              <button
-                style={savedNoteTab === "original" ? styles.activeTab : styles.tabButton}
-                onClick={() => setSavedNoteTab("original")}
-              >
-                Original Text
-              </button>
-
-              <button
-                style={savedNoteTab === "keypoints" ? styles.activeTab : styles.tabButton}
-                onClick={() => setSavedNoteTab("keypoints")}
-              >
-                Key Points
-              </button>
-
-              <button
-                style={savedNoteTab === "flashcards" ? styles.activeTab : styles.tabButton}
-                onClick={() => setSavedNoteTab("flashcards")}
-              >
-                Flashcards
-              </button>
-
-              <button
-                style={savedNoteTab === "summary" ? styles.activeTab : styles.tabButton}
-                onClick={() => setSavedNoteTab("summary")}
-              >
-                Summary
-              </button>
-            </div>
-
-            {savedNoteTab === "original" && (
-  <section className="study-resource-sheet">
-    <header className="study-resource-header">
-      <p className="study-resource-label">Saved Source Material</p>
-
-      <h2>Original Notes</h2>
-
-      <p>
-        The original text used to generate this note’s study resources.
-      </p>
-    </header>
-
-    <div className="study-resource-content">
-      {selectedSavedNote.originalText ? (
-        <div className="original-note-content">
-          {selectedSavedNote.originalText}
-        </div>
-      ) : (
-        <p className="empty-resource-message">
-          No original text saved.
-        </p>
-      )}
-    </div>
-  </section>
-)}
-
-            {savedNoteTab === "keypoints" && (
-  <section className="study-resource-sheet">
-    <header className="study-resource-header">
-      <p className="study-resource-label">AI Revision Resource</p>
-      <h2>Key Points</h2>
-      <p>
-        The most important concepts extracted from this saved note.
-      </p>
-    </header>
-
-    <div className="study-resource-content">
-      <MarkdownContent
-        content={selectedSavedNote.keyPoints}
-        emptyMessage="No key points saved."
-      />
-    </div>
-  </section>
-)}
-
-            {savedNoteTab === "summary" && (
-  <section className="summary-sheet">
-    <header className="summary-sheet-header">
-      <p className="summary-sheet-label">AI Revision Resource</p>
-      <h2>Summary Sheet</h2>
-      <p>
-        A concise revision guide generated from this saved note.
-      </p>
-    </header>
-
-    <div className="summary-sheet-content">
-      <MarkdownContent
-        content={selectedSavedNote.summary}
-        emptyMessage="No summary saved."
-      />
-    </div>
-
-    {Array.isArray(selectedSavedNote.lectureVisuals) &&
-      selectedSavedNote.lectureVisuals.length > 0 && (
-        <section className="lecture-visuals-section">
-          <div className="lecture-visuals-header">
-            <div>
-              <p className="summary-sheet-label">
-                From your uploaded notes
-              </p>
-
-              <h3>Important Lecture Visuals</h3>
-            </div>
-
-            <span className="visual-count">
-              {selectedSavedNote.lectureVisuals.length} selected
-            </span>
-          </div>
-
-          <div className="lecture-visuals">
-            {selectedSavedNote.lectureVisuals.map((visual) => (
-              <figure
-                key={visual.pageNumber}
-                className="lecture-page"
-              >
-                <div className="lecture-page-heading">
-                  <span>Lecture visual</span>
-                  <strong>Page {visual.pageNumber}</strong>
-                </div>
-
-                <img
-                  src={visual.imageUrl}
-                  alt={`Important lecture visual from page ${visual.pageNumber}`}
-                />
-
-                <figcaption>
-                  Automatically selected as a useful revision visual.
-                </figcaption>
-              </figure>
-            ))}
-          </div>
-        </section>
-      )}
-  </section>
-)}
-
-            {savedNoteTab === "flashcards" && (
-  <section className="study-resource-sheet">
-    <header className="study-resource-header">
-      <p className="study-resource-label">Active Recall Resource</p>
-      <h2>Flashcards</h2>
-      <p>
-        Review one question at a time and reveal the answer when ready.
-      </p>
-    </header>
-
-    <div className="study-resource-content">
-      {!Array.isArray(selectedSavedNote.flashcards) ||
-      selectedSavedNote.flashcards.length === 0 ? (
-        <p className="empty-resource-message">
-          No flashcards saved.
-        </p>
-      ) : (
-        <div className="flashcard-study">
-          <div className="flashcard-progress-row">
-            <span>
-              Card {savedCurrentCard + 1} of{" "}
-              {selectedSavedNote.flashcards.length}
-            </span>
-
-            <div className="flashcard-progress-track">
-              <div
-                className="flashcard-progress-fill"
-                style={{
-                  width: `${
-                    ((savedCurrentCard + 1) /
-                      selectedSavedNote.flashcards.length) *
-                    100
-                  }%`,
-                }}
-              />
-            </div>
-          </div>
-
-          <article className="flashcard-study-card">
-            <p className="flashcard-section-label">Question</p>
-
-            <h3 className="flashcard-question">
-              {selectedSavedNote.flashcards[savedCurrentCard].question}
-            </h3>
-
-            {savedShowAnswer ? (
-              <div className="flashcard-answer-panel">
-                <p className="flashcard-section-label">Answer</p>
-
-                <p className="flashcard-answer-text">
-                  {
-                    selectedSavedNote.flashcards[savedCurrentCard]
-                      .answer
-                  }
-                </p>
-              </div>
-            ) : (
-              <p className="flashcard-hidden-hint">
-                Try answering before revealing the response.
-              </p>
-            )}
-          </article>
-
-          <div className="flashcard-study-controls">
-            <button
-              className="study-control-button secondary"
-              disabled={savedCurrentCard === 0}
-              onClick={() => {
-                setSavedCurrentCard((prev) =>
-                  Math.max(prev - 1, 0)
-                );
-                setSavedShowAnswer(false);
-              }}
-            >
-              Previous
-            </button>
-
-            <button
-              className="study-control-button primary"
-              onClick={() =>
-                setSavedShowAnswer((current) => !current)
-              }
-            >
-              {savedShowAnswer ? "Hide Answer" : "Show Answer"}
-            </button>
-
-            <button
-              className="study-control-button secondary"
-              disabled={
-                savedCurrentCard ===
-                selectedSavedNote.flashcards.length - 1
-              }
-              onClick={() => {
-                setSavedCurrentCard((prev) =>
-                  Math.min(
-                    prev + 1,
-                    selectedSavedNote.flashcards.length - 1
-                  )
-                );
-                setSavedShowAnswer(false);
-              }}
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  </section>
-)}
-        </div>
-      )}
-      </>
-    )}
-  </>
-)}
-        </div>
+                        <label className="subject-summary-editor-label">
+                          Edit subject summary
+                          <textarea
+                            className="subject-summary-editor"
+                            value={subjectSummary}
+                            onChange={(event) =>
+                              setSubjectSummary(event.target.value)
+                            }
+                          />
+                        </label>
+                      </>
+                    ) : (
+                      <EmptyState
+                        icon="bookOpen"
+                        title="No subject summary yet"
+                        text={`Save notes with generated key points under ${subject}, then generate a consolidated summary of the whole subject. If nothing has been saved yet, generation will not have any content to work from.`}
+                      />
+                    )}
+                  </div>
+                </section>
+              )}
+            </>
+          )}
+        </main>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(confirmDialog)}
+        title={confirmDialog?.title}
+        message={confirmDialog?.message}
+        confirmLabel={confirmDialog?.confirmLabel || "Delete"}
+        onConfirm={() => {
+          confirmDialog?.onConfirm?.();
+          setConfirmDialog(null);
+        }}
+        onCancel={() => setConfirmDialog(null)}
+      />
     </div>
   );
 }
 
-const styles = {
-  page: {
-    minHeight: "100vh",
-    background:
-      "linear-gradient(135deg, #eef2ff 0%, #f8fafc 50%, #e0f2fe 100%)",
-    padding: "40px",
-    fontFamily: "Arial, sans-serif",
-    boxSizing: "border-box",
-  },
-
-  container: {
-    maxWidth: "1200px",
-    margin: "0 auto",
-  },
-
-  loginContainer: {
-    minHeight: "calc(100vh - 80px)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  loginCard: {
-    width: "100%",
-    maxWidth: "430px",
-    backgroundColor: "white",
-    color: "#111827",
-    padding: "36px",
-    borderRadius: "20px",
-    boxShadow: "0 20px 45px rgba(15, 23, 42, 0.12)",
-    border: "1px solid #e5e7eb",
-  },
-
-  loginTitle: {
-    textAlign: "center",
-    fontSize: "34px",
-    marginBottom: "8px",
-    color: "#111827",
-    fontWeight: "800",
-  },
-
-  loginSubtitle: {
-    textAlign: "center",
-    fontSize: "15px",
-    color: "#6b7280",
-    marginBottom: "28px",
-  },
-
-  loginButton: {
-    width: "100%",
-    padding: "13px 20px",
-    border: "none",
-    borderRadius: "10px",
-    backgroundColor: "#2563eb",
-    color: "white",
-    fontSize: "15px",
-    fontWeight: "700",
-    cursor: "pointer",
-    marginTop: "8px",
-  },
-
-  registerButton: {
-    width: "100%",
-    padding: "13px 20px",
-    border: "1px solid #2563eb",
-    borderRadius: "10px",
-    backgroundColor: "white",
-    color: "#2563eb",
-    fontSize: "15px",
-    fontWeight: "700",
-    cursor: "pointer",
-    marginTop: "12px",
-  },
-
-  title: {
-    textAlign: "center",
-    fontSize: "48px",
-    marginBottom: "10px",
-    color: "#111827",
-    fontWeight: "bold",
-  },
-
-  subtitle: {
-    textAlign: "center",
-    color: "#4b5563",
-    fontSize: "18px",
-    marginBottom: "30px",
-  },
-
-  card: {
-    backgroundColor: "white",
-    color: "#111827",
-    padding: "28px",
-    borderRadius: "14px",
-    marginBottom: "24px",
-    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-  },
-
-  heading: {
-    marginBottom: "16px",
-    color: "#111827",
-    textAlign: "center",
-  },
-
-  textarea: {
-    width: "100%",
-    height: "220px",
-    padding: "14px",
-    fontSize: "15px",
-    borderRadius: "8px",
-    border: "1px solid #d1d5db",
-    resize: "vertical",
-    backgroundColor: "white",
-    color: "#111827",
-    boxSizing: "border-box",
-  },
-
-  richEditorBox: {
-    border: "1px solid #d1d5db",
-    borderRadius: "10px",
-    padding: "18px",
-    minHeight: "300px",
-    backgroundColor: "white",
-    color: "#111827",
-    lineHeight: "1.7",
-  },
-
-  input: {
-    width: "100%",
-    padding: "12px",
-    marginBottom: "12px",
-    borderRadius: "8px",
-    border: "1px solid #d1d5db",
-    fontSize: "15px",
-    boxSizing: "border-box",
-    backgroundColor: "white",
-    color: "#111827",
-  },
-
-  uploadBox: {
-    marginTop: "20px",
-    padding: "16px",
-    backgroundColor: "#f9fafb",
-    color: "#374151",
-    borderRadius: "8px",
-    border: "1px solid #e5e7eb",
-    textAlign: "center",
-  },
-
-  uploadText: {
-    marginBottom: "10px",
-    fontWeight: "500",
-  },
-
-  helperText: {
-    marginTop: "16px",
-    color: "#6b7280",
-    fontSize: "14px",
-    textAlign: "center",
-  },
-
-  actionSection: {
-    marginTop: "24px",
-  },
-
-  actionLabel: {
-    marginTop: "18px",
-    marginBottom: "8px",
-    color: "#6b7280",
-    fontSize: "14px",
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-  },
-
-  buttonRow: {
-    marginTop: "10px",
-    display: "flex",
-    gap: "12px",
-    flexWrap: "wrap",
-  },
-
-  button: {
-    padding: "12px 20px",
-    border: "none",
-    borderRadius: "8px",
-    backgroundColor: "#2563eb",
-    color: "white",
-    fontSize: "15px",
-    fontWeight: "600",
-    cursor: "pointer",
-  },
-
-  secondaryButton: {
-    padding: "12px 20px",
-    border: "1px solid #2563eb",
-    borderRadius: "8px",
-    backgroundColor: "white",
-    color: "#2563eb",
-    fontSize: "15px",
-    fontWeight: "600",
-    cursor: "pointer",
-  },
-
-  logoutButton: {
-    padding: "12px 20px",
-    border: "1px solid #dc2626",
-    borderRadius: "8px",
-    backgroundColor: "white",
-    color: "#dc2626",
-    fontSize: "15px",
-    fontWeight: "600",
-    cursor: "pointer",
-  },
-
-  tabRow: {
-    display: "flex",
-    gap: "10px",
-    marginBottom: "24px",
-    borderBottom: "1px solid #e5e7eb",
-    paddingBottom: "12px",
-    flexWrap: "wrap",
-  },
-
-  tabButton: {
-    padding: "10px 16px",
-    border: "1px solid #d1d5db",
-    borderRadius: "8px",
-    backgroundColor: "white",
-    color: "#374151",
-    fontSize: "14px",
-    fontWeight: "600",
-    cursor: "pointer",
-  },
-
-  activeTab: {
-    padding: "10px 16px",
-    border: "1px solid #2563eb",
-    borderRadius: "8px",
-    backgroundColor: "#2563eb",
-    color: "white",
-    fontSize: "14px",
-    fontWeight: "700",
-    cursor: "pointer",
-  },
-
-  flashcardControls: {
-    marginTop: "22px",
-    display: "flex",
-    justifyContent: "center",
-    gap: "12px",
-    flexWrap: "wrap",
-  },
-
-  primaryStudyButton: {
-    padding: "12px 28px",
-    border: "none",
-    borderRadius: "8px",
-    backgroundColor: "#2563eb",
-    color: "white",
-    fontSize: "15px",
-    fontWeight: "700",
-    cursor: "pointer",
-  },
-
-  loading: {
-    marginTop: "18px",
-    color: "#2563eb",
-    fontWeight: "bold",
-  },
-
-  error: {
-    marginTop: "18px",
-    color: "#dc2626",
-    fontWeight: "bold",
-  },
-
-  output: {
-    whiteSpace: "pre-wrap",
-    lineHeight: "1.8",
-    color: "#374151",
-    fontSize: "15px",
-  },
-
-  savedNotesTabs: {
-  display: "flex",
-  gap: "10px",
-  flexWrap: "wrap",
-  marginBottom: "20px",
-},
-
-noteTab: {
-  padding: "10px 16px",
-  border: "1px solid #d1d5db",
-  borderRadius: "8px",
-  backgroundColor: "white",
-  color: "#374151",
-  cursor: "pointer",
-  fontWeight: "600",
-},
-
-activeNoteTab: {
-  padding: "10px 16px",
-  border: "1px solid #2563eb",
-  borderRadius: "8px",
-  backgroundColor: "#2563eb",
-  color: "white",
-  cursor: "pointer",
-  fontWeight: "700",
-},
-
-savedNoteHeader: {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: "20px",
-  gap: "16px",
-},
-
-deleteButton: {
-  padding: "10px 16px",
-  border: "none",
-  borderRadius: "8px",
-  backgroundColor: "#dc2626",
-  color: "white",
-  cursor: "pointer",
-  fontWeight: "600",
-},
-  
-  savedNoteCard: {
-    borderTop: "1px solid #e5e7eb",
-    paddingTop: "16px",
-    marginTop: "16px",
-  },
-
-  savedFlashcard: {
-    borderTop: "1px solid #e5e7eb",
-    paddingTop: "10px",
-    marginTop: "10px",
-  },
-
-  flashcardBox: {
-    marginTop: "16px",
-  },
-
-  cardCounter: {
-    textAlign: "center",
-    color: "#6b7280",
-    marginBottom: "12px",
-  },
-
-  flashcard: {
-    backgroundColor: "#f9fafb",
-    border: "1px solid #e5e7eb",
-    borderRadius: "18px",
-    padding: "32px",
-    minHeight: "250px",
-    boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-    textAlign: "center",
-  },
-
-  flashcardLabel: {
-    color: "#2563eb",
-    marginBottom: "10px",
-  },
-
-  flashcardText: {
-    fontSize: "22px",
-    fontWeight: "600",
-    color: "#111827",
-    lineHeight: "1.5",
-  },
-
-  flashcardAnswer: {
-    fontSize: "18px",
-    color: "#374151",
-    lineHeight: "1.6",
-    marginTop: "10px",
-  },
-};
-
-export default App;
+export default function AppRoot() {
+  return (
+    <ToastProvider>
+      <App />
+    </ToastProvider>
+  );
+}

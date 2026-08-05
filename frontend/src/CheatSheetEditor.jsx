@@ -9,6 +9,8 @@ import React, {
 import { Rnd } from "react-rnd";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import { useToast } from "./components/ui/Toast";
+import ConfirmDialog from "./components/ui/ConfirmDialog";
 import "./CheatSheetEditor.css";
 
 /* ------------------------------------------------------------------ */
@@ -298,6 +300,8 @@ const CheatSheetEditor = forwardRef(function CheatSheetEditor(
   const [history, setHistory] = useState([]);
   const [future, setFuture] = useState([]);
   const [clipboard, setClipboard] = useState(null);
+  const [pendingDeletePage, setPendingDeletePage] = useState(null);
+  const toast = useToast();
 
   const canvasRef = useRef(null);
   const editableRefs = useRef({});
@@ -516,9 +520,10 @@ const CheatSheetEditor = forwardRef(function CheatSheetEditor(
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    toast.success("Cheat sheet exported as PNG.");
   } catch (error) {
     console.error("PNG export failed:", error);
-    alert(`PNG export failed: ${error.message}`);
+    toast.error(`PNG export failed: ${error.message}`);
   }
 };
 
@@ -560,9 +565,10 @@ const CheatSheetEditor = forwardRef(function CheatSheetEditor(
     );
 
     pdf.save(`${exportFileName}.pdf`);
+    toast.success("Cheat sheet exported as PDF.");
   } catch (error) {
     console.error("PDF export failed:", error);
-    alert(`PDF export failed: ${error.message}`);
+    toast.error(`PDF export failed: ${error.message}`);
   }
 };
 
@@ -974,7 +980,22 @@ onDoubleClick={(event) => {
             {pages.map((p, i) => (
               <div key={p.id} className={`cs-page-tab ${i === pageIndex ? "active" : ""}`}>
                 <button onClick={() => setPageIndex(i)}>{i + 1}</button>
-                {pages.length > 1 && <span onClick={() => deletePage(i)}>✕</span>}
+                {pages.length > 1 && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Delete page ${i + 1}`}
+                    onClick={() => setPendingDeletePage(i)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setPendingDeletePage(i);
+                      }
+                    }}
+                  >
+                    ✕
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -1070,6 +1091,18 @@ onDoubleClick={(event) => {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={pendingDeletePage !== null}
+        title="Delete this page?"
+        message={`Page ${(pendingDeletePage ?? 0) + 1} and every block on it will be removed from the cheat sheet.`}
+        confirmLabel="Delete page"
+        onConfirm={() => {
+          deletePage(pendingDeletePage);
+          setPendingDeletePage(null);
+        }}
+        onCancel={() => setPendingDeletePage(null)}
+      />
     </div>
   );
 });
