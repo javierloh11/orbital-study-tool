@@ -12,7 +12,6 @@ import {
 import jsPDF from "jspdf";
 import CheatSheetEditor from "./CheatSheetEditor";
 import { useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
 import mermaid from "mermaid";
 
 import Sidebar from "./components/layout/Sidebar";
@@ -21,6 +20,13 @@ import Icon from "./components/ui/Icon";
 import EmptyState from "./components/ui/EmptyState";
 import ConfirmDialog from "./components/ui/ConfirmDialog";
 import { ToastProvider, useToast } from "./components/ui/Toast";
+import { MarkdownContent } from "./components/ui/Markdown";
+import {
+  escapeHtml,
+  markdownSectionToHtml,
+  splitMarkdownSections,
+  extractMermaidChart,
+} from "./components/builder/markdownUtils";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -32,205 +38,6 @@ mermaid.initialize({
   securityLevel: "strict",
   theme: "default",
 });
-
-function MermaidDiagram({ chart }) {
-  const containerRef = useRef(null);
-  const [renderError, setRenderError] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function renderDiagram() {
-      const source = chart?.trim();
-
-      if (!containerRef.current || !source) {
-        return;
-      }
-
-      setRenderError("");
-      containerRef.current.innerHTML = "";
-
-      try {
-        await mermaid.parse(source);
-
-        const diagramId = `mermaid-${crypto.randomUUID()}`;
-        const { svg } = await mermaid.render(diagramId, source);
-
-        if (!cancelled && containerRef.current) {
-          containerRef.current.innerHTML = svg;
-        }
-      } catch (error) {
-        console.error("Mermaid render error:", error);
-
-        if (!cancelled) {
-          setRenderError(
-            error instanceof Error
-              ? error.message
-              : "The generated diagram contains invalid Mermaid syntax."
-          );
-        }
-      }
-    }
-
-    renderDiagram();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [chart]);
-
-  if (renderError) {
-    return (
-      <div className="mermaid-error">
-        <p>
-          <strong>Diagram could not be rendered.</strong>
-        </p>
-
-        <details>
-          <summary>Show diagram source</summary>
-          <pre>{chart}</pre>
-        </details>
-      </div>
-    );
-  }
-
-  return <div ref={containerRef} className="mermaid-diagram" />;
-}
-
-function MarkdownContent({ content, emptyMessage = "No content available." }) {
-  if (!content) {
-    return <p className="empty-resource-message">{emptyMessage}</p>;
-  }
-
-  return (
-    <div className="markdown-body">
-      <ReactMarkdown
-        components={{
-          code({ className, children, ...props }) {
-            const languageMatch = /language-(\w+)/.exec(className || "");
-            const language = languageMatch?.[1]?.toLowerCase();
-
-            if (language === "mermaid") {
-              return (
-                <MermaidDiagram
-                  chart={String(children).replace(/\n$/, "")}
-                />
-              );
-            }
-
-            return (
-              <code className={className} {...props}>
-                {children}
-              </code>
-            );
-          },
-        }}
-      >
-        {content}
-      </ReactMarkdown>
-    </div>
-  );
-}
-
-function escapeHtml(value = "") {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
-
-function markdownSectionToHtml(section = "") {
-  const lines = section
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  if (!lines.length) {
-    return "<p>No content available.</p>";
-  }
-
-  return lines
-    .map((line) => {
-      if (line.startsWith("### ")) {
-        return `<h3>${escapeHtml(line.slice(4))}</h3>`;
-      }
-
-      if (line.startsWith("## ")) {
-        return `<h2>${escapeHtml(line.slice(3))}</h2>`;
-      }
-
-      if (line.startsWith("# ")) {
-        return `<h1>${escapeHtml(line.slice(2))}</h1>`;
-      }
-
-      if (/^[-*]\s+/.test(line)) {
-        return `<p>• ${escapeHtml(line.replace(/^[-*]\s+/, ""))}</p>`;
-      }
-
-      if (/^\d+\.\s+/.test(line)) {
-        return `<p>${escapeHtml(line)}</p>`;
-      }
-
-      return `<p>${escapeHtml(line)}</p>`;
-    })
-    .join("");
-}
-
-function splitMarkdownSections(markdown = "") {
-  const source = markdown.trim();
-
-  if (!source) {
-    return [];
-  }
-
-  const lines = source.split("\n");
-  const sections = [];
-  let currentSection = [];
-
-  const pushCurrentSection = () => {
-    const content = currentSection.join("\n").trim();
-
-    if (content) {
-      sections.push(content);
-    }
-
-    currentSection = [];
-  };
-
-  for (const line of lines) {
-    const isHeading = /^#{1,6}\s+/.test(line);
-    const isBullet = /^[-*]\s+/.test(line);
-    const isNumberedItem = /^\d+\.\s+/.test(line);
-
-    if (
-      currentSection.length > 0 &&
-      (isHeading || isBullet || isNumberedItem)
-    ) {
-      pushCurrentSection();
-    }
-
-    currentSection.push(line);
-  }
-
-  pushCurrentSection();
-
-  return sections;
-}
-
-function extractMermaidChart(section = "") {
-  const match = section.match(
-    /```[ \t]*mermaid[ \t]*\r?\n([\s\S]*?)```/i
-  );
-
-  if (!match) {
-    return null;
-  }
-
-  return {
-    chart: match[1].trim(),
-    remainingText: section.replace(match[0], "").trim(),
-  };
-}
 
 async function mermaidChartToDataUrl(chart) {
   const source = chart?.trim();
@@ -326,61 +133,6 @@ function ContentSkeleton() {
   );
 }
 
-function ResourceSectionPicker({
-  content,
-  emptyMessage,
-  onAdd,
-  onAddAll,
-}) {
-  const sections = splitMarkdownSections(content);
-
-  if (!sections.length) {
-    return (
-      <p className="empty-resource-message">
-        {emptyMessage}
-      </p>
-    );
-  }
-
-  return (
-    <>
-      <div className="builder-picker-header">
-        <p>
-          Select individual sections or add the entire resource.
-        </p>
-
-        <button
-          type="button"
-          className="builder-add-all-button"
-          onClick={onAddAll}
-        >
-          Add all sections
-        </button>
-      </div>
-
-      <div className="builder-resource-grid">
-        {sections.map((section, index) => (
-          <article
-            key={`${index}-${section.slice(0, 30)}`}
-            className="builder-resource-item"
-          >
-            <div className="builder-resource-preview">
-              <MarkdownContent content={section} />
-            </div>
-
-            <button
-              type="button"
-              onClick={() => onAdd(section, index)}
-            >
-              Add to canvas
-            </button>
-          </article>
-        ))}
-      </div>
-    </>
-  );
-}
-
 const RESOURCE_TABS = ["keypoints", "flashcards", "summary"];
 
 const PAGE_TITLES = {
@@ -472,7 +224,6 @@ function App() {
 
   const [cheatSheetLayout, setCheatSheetLayout] = useState(null);
   const editorRef = useRef(null);
-  const [editorSource, setEditorSource] = useState("keypoints");
   const [layoutDirty, setLayoutDirty] = useState(false);
 
   const [inputMethod, setInputMethod] = useState("paste");
@@ -2703,208 +2454,6 @@ function App() {
                 </p>
               </header>
 
-              <div className="builder-status-row">
-                <span
-                  className={
-                    layoutDirty
-                      ? "builder-status-badge unsaved"
-                      : "builder-status-badge saved"
-                  }
-                >
-                  {layoutDirty ? (
-                    <>
-                      <Icon name="clock" size={13} />
-                      Unsaved changes
-                    </>
-                  ) : (
-                    <>
-                      <Icon name="check" size={13} />
-                      Saved
-                    </>
-                  )}
-                </span>
-
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={saveNote}
-                  disabled={loading !== ""}
-                >
-                  <Icon name="save" size={14} />
-                  {editingSavedNoteId ? "Update note" : "Save note"}
-                </button>
-              </div>
-
-              <div className="builder-source-panel">
-                <div className="builder-source-tabs">
-                  <button
-                    type="button"
-                    className={
-                      editorSource === "keypoints"
-                        ? "builder-source-tab active"
-                        : "builder-source-tab"
-                    }
-                    onClick={() => setEditorSource("keypoints")}
-                  >
-                    Key Points
-                  </button>
-
-                  <button
-                    type="button"
-                    className={
-                      editorSource === "summary"
-                        ? "builder-source-tab active"
-                        : "builder-source-tab"
-                    }
-                    onClick={() => setEditorSource("summary")}
-                  >
-                    Summary
-                  </button>
-
-                  <button
-                    type="button"
-                    className={
-                      editorSource === "flashcards"
-                        ? "builder-source-tab active"
-                        : "builder-source-tab"
-                    }
-                    onClick={() => setEditorSource("flashcards")}
-                  >
-                    Flashcards
-                  </button>
-
-                  <button
-                    type="button"
-                    className={
-                      editorSource === "visuals"
-                        ? "builder-source-tab active"
-                        : "builder-source-tab"
-                    }
-                    onClick={() => setEditorSource("visuals")}
-                  >
-                    Visuals
-                  </button>
-
-                  <button
-                    type="button"
-                    className={
-                      editorSource === "original"
-                        ? "builder-source-tab active"
-                        : "builder-source-tab"
-                    }
-                    onClick={() => setEditorSource("original")}
-                  >
-                    Original Notes
-                  </button>
-                </div>
-
-                {editorSource === "keypoints" && (
-                  <ResourceSectionPicker
-                    content={keyPoints}
-                    emptyMessage="Generate key points before adding them."
-                    onAdd={addResourceSectionToEditor}
-                    onAddAll={() => addAllSectionsToEditor(keyPoints)}
-                  />
-                )}
-
-                {editorSource === "summary" && (
-                  <ResourceSectionPicker
-                    content={summary}
-                    emptyMessage="Generate a summary before adding it."
-                    onAdd={addResourceSectionToEditor}
-                    onAddAll={() => addAllSectionsToEditor(summary)}
-                  />
-                )}
-
-                {editorSource === "original" && (
-                  <ResourceSectionPicker
-                    content={notes}
-                    emptyMessage="No original notes are available."
-                    onAdd={addResourceSectionToEditor}
-                    onAddAll={() => addAllSectionsToEditor(notes)}
-                  />
-                )}
-
-                {editorSource === "flashcards" && (
-                  <div className="builder-resource-grid">
-                    {flashcards.length === 0 ? (
-                      <p className="empty-resource-message">
-                        Generate flashcards before adding them.
-                      </p>
-                    ) : (
-                      flashcards.map((card, index) => (
-                        <article
-                          key={`${card.question}-${index}`}
-                          className="builder-resource-item"
-                        >
-                          <p className="builder-resource-label">
-                            Flashcard {index + 1}
-                          </p>
-
-                          <h4>{card.question}</h4>
-                          <p>{card.answer}</p>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              addFlashcardToEditor(card, index)
-                            }
-                          >
-                            Add to canvas
-                          </button>
-                        </article>
-                      ))
-                    )}
-                  </div>
-                )}
-
-                {editorSource === "visuals" && (
-                  <div className="builder-resource-grid">
-                    {selectedPdfPages.length === 0 ? (
-                      <p className="empty-resource-message">
-                        No lecture visuals are currently available.
-                      </p>
-                    ) : (
-                      selectedPdfPages.map((pageNumber, index) => {
-                        const page = pdfPages.find(
-                          (item) => item.pageNumber === pageNumber
-                        );
-
-                        if (!page) {
-                          return null;
-                        }
-
-                        return (
-                          <article
-                            key={page.pageNumber}
-                            className="builder-resource-item builder-visual-item"
-                          >
-                            <p className="builder-resource-label">
-                              Page {page.pageNumber}
-                            </p>
-
-                            <img
-                              className="builder-visual-preview"
-                              src={page.imageUrl}
-                              alt={`Lecture page ${page.pageNumber}`}
-                            />
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                addVisualToEditor(page, index)
-                              }
-                            >
-                              Add to canvas
-                            </button>
-                          </article>
-                        );
-                      })
-                    )}
-                  </div>
-                )}
-              </div>
-
               <CheatSheetEditor
                 ref={editorRef}
                 initialPages={cheatSheetLayout}
@@ -2915,6 +2464,25 @@ function App() {
                 exportFileName={
                   noteTitle || "stitch-cheat-sheet"
                 }
+                resources={{
+                  keyPoints,
+                  summary,
+                  notes,
+                  flashcards,
+                  visuals: selectedPdfPages
+                    .map((pageNumber) =>
+                      pdfPages.find((page) => page.pageNumber === pageNumber)
+                    )
+                    .filter(Boolean),
+                }}
+                onAddSection={addResourceSectionToEditor}
+                onAddAll={addAllSectionsToEditor}
+                onAddFlashcard={addFlashcardToEditor}
+                onAddVisual={addVisualToEditor}
+                dirty={layoutDirty}
+                saving={loading === "Saving note..."}
+                onRequestSave={saveNote}
+                onBack={() => setActiveTab("keypoints")}
               />
             </section>
           )}

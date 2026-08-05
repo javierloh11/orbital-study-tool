@@ -7,6 +7,143 @@
  */
 
 const PATHS = {
+  undo: (
+    <>
+      <path d="M3 7v6h6" />
+      <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+    </>
+  ),
+  redo: (
+    <>
+      <path d="M21 7v6h-6" />
+      <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" />
+    </>
+  ),
+  lock: (
+    <>
+      <rect x="3" y="11" width="18" height="11" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </>
+  ),
+  unlock: (
+    <>
+      <rect x="3" y="11" width="18" height="11" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+    </>
+  ),
+  grid: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M3 9h18" />
+      <path d="M3 15h18" />
+      <path d="M9 3v18" />
+      <path d="M15 3v18" />
+    </>
+  ),
+  alignLeft: (
+    <>
+      <path d="M4 3v18" />
+      <rect x="8" y="6" width="12" height="4" rx="1" />
+      <rect x="8" y="14" width="7" height="4" rx="1" />
+    </>
+  ),
+  alignCenterH: (
+    <>
+      <path d="M12 3v18" />
+      <rect x="5" y="6" width="14" height="4" rx="1" />
+      <rect x="8" y="14" width="8" height="4" rx="1" />
+    </>
+  ),
+  alignRight: (
+    <>
+      <path d="M20 3v18" />
+      <rect x="4" y="6" width="12" height="4" rx="1" />
+      <rect x="9" y="14" width="7" height="4" rx="1" />
+    </>
+  ),
+  alignTop: (
+    <>
+      <path d="M3 4h18" />
+      <rect x="6" y="8" width="4" height="12" rx="1" />
+      <rect x="14" y="8" width="4" height="7" rx="1" />
+    </>
+  ),
+  alignMiddle: (
+    <>
+      <path d="M3 12h18" />
+      <rect x="6" y="5" width="4" height="14" rx="1" />
+      <rect x="14" y="8" width="4" height="8" rx="1" />
+    </>
+  ),
+  alignBottom: (
+    <>
+      <path d="M3 20h18" />
+      <rect x="6" y="4" width="4" height="12" rx="1" />
+      <rect x="14" y="9" width="4" height="7" rx="1" />
+    </>
+  ),
+  maximize: (
+    <>
+      <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+      <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+      <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+      <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+    </>
+  ),
+  minus: (
+    <>
+      <path d="M5 12h14" />
+    </>
+  ),
+  keyboard: (
+    <>
+      <rect x="2" y="5" width="20" height="14" rx="2" />
+      <path d="M6 9h.01" />
+      <path d="M10 9h.01" />
+      <path d="M14 9h.01" />
+      <path d="M18 9h.01" />
+      <path d="M6 13h.01" />
+      <path d="M18 13h.01" />
+      <path d="M9 13h6" transform="translate(0 4)" />
+      <path d="M9 13h6" />
+    </>
+  ),
+  template: (
+    <>
+      <rect x="3" y="3" width="18" height="6" rx="1" />
+      <rect x="3" y="13" width="8" height="8" rx="1" />
+      <rect x="15" y="13" width="6" height="8" rx="1" />
+    </>
+  ),
+  crosshair: (
+    <>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 4V2" />
+      <path d="M12 22v-2" />
+      <path d="M4 12H2" />
+      <path d="M22 12h-2" />
+    </>
+  ),
+  shrink: (
+    <>
+      <path d="M8 3v3a2 2 0 0 1-2 2H3" />
+      <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
+      <path d="M3 16h3a2 2 0 0 1 2 2v3" />
+      <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
+    </>
+  ),
+  layoutRight: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M15 3v18" />
+    </>
+  ),
+  layoutLeft: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M9 3v18" />
+    </>
+  ),
   logo: (
     <>
       <path d="M12 2 2 7l10 5 10-5-10-5Z" />
