@@ -10,7 +10,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://orbitalstudytool.vercel.app",
+  "https://orbital-study-tool.vercel.app",
   process.env.FRONTEND_URL,
 ]
   .filter(Boolean)
